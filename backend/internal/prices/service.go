@@ -183,8 +183,8 @@ func toUpdates(quotes []providers.AssetQuote, assets map[string]dueAsset, fetche
 func lookupKeyForAsset(asset db.TrackedAsset) string {
 	switch asset.Type {
 	case "crypto":
-		if asset.MarketDataID != "" {
-			return strings.ToLower(strings.TrimSpace(asset.MarketDataID))
+		if marketDataID := strings.TrimSpace(asset.MarketDataID); marketDataID != "" {
+			return strings.ToLower(marketDataID)
 		}
 		return strings.ToLower(strings.TrimSpace(asset.Symbol))
 	default:
