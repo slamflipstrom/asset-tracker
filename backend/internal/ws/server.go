@@ -2,21 +2,54 @@ package ws
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
+	"asset-tracker/internal/auth"
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/wsjson"
 )
 
 type Server struct {
-	Hub *Hub
+	Hub      *Hub
+	Verifier auth.Verifier
 }
 
-func NewServer(hub *Hub) *Server {
-	return &Server{Hub: hub}
+type clientMessage struct {
+	Type    string `json:"type"`
+	Scope   string `json:"scope"`
+	AssetID int64  `json:"asset_id"`
+}
+
+type serverMessage struct {
+	Type    string `json:"type"`
+	Scope   string `json:"scope,omitempty"`
+	AssetID int64  `json:"asset_id,omitempty"`
+	UserID  string `json:"user_id,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+func NewServer(hub *Hub, verifier auth.Verifier) *Server {
+	return &Server{Hub: hub, Verifier: verifier}
 }
 
 func (s *Server) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		token := extractToken(r)
+		if token == "" {
+			http.Error(w, "missing auth token", http.StatusUnauthorized)
+			return
+		}
+
+		claims, err := s.Verifier.Verify(r.Context(), token)
+		if err != nil {
+			http.Error(w, "invalid auth token", http.StatusUnauthorized)
+			return
+		}
+
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 			InsecureSkipVerify: true,
 		})
@@ -27,10 +60,101 @@ func (s *Server) Handler() http.HandlerFunc {
 
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
+		conn.SetReadLimit(1 << 20)
 
-		_ = ctx
-		// TODO: verify JWT, register user, and handle subscribe messages.
+		sessionID := claims.Subject + ":" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		if err := s.Hub.Add(sessionID, claims.Subject); err != nil {
+			_ = wsjson.Write(ctx, conn, serverMessage{
+				Type:    "error",
+				Message: "failed to initialize websocket session",
+			})
+			_ = conn.Close(websocket.StatusInternalError, "failed to initialize session")
+			return
+		}
+		defer s.Hub.Remove(sessionID)
 
-		conn.Close(websocket.StatusNormalClosure, "bye")
+		if err := wsjson.Write(ctx, conn, serverMessage{
+			Type:   "ready",
+			UserID: claims.Subject,
+		}); err != nil {
+			_ = conn.Close(websocket.StatusInternalError, "failed to write ready message")
+			return
+		}
+
+		for {
+			var msg clientMessage
+			if err := wsjson.Read(ctx, conn, &msg); err != nil {
+				status := websocket.CloseStatus(err)
+				if status == websocket.StatusNormalClosure || status == websocket.StatusGoingAway {
+					_ = conn.Close(websocket.StatusNormalClosure, "bye")
+					return
+				}
+				_ = conn.Close(websocket.StatusUnsupportedData, "invalid websocket message")
+				return
+			}
+
+			if err := s.handleMessage(ctx, conn, sessionID, msg); err != nil {
+				_ = wsjson.Write(ctx, conn, serverMessage{
+					Type:    "error",
+					Message: err.Error(),
+				})
+			}
+		}
 	}
+}
+
+func (s *Server) handleMessage(ctx context.Context, conn *websocket.Conn, sessionID string, msg clientMessage) error {
+	action := strings.ToLower(strings.TrimSpace(msg.Type))
+	scope := strings.ToLower(strings.TrimSpace(msg.Scope))
+
+	switch action {
+	case "subscribe":
+		switch scope {
+		case "portfolio":
+			s.Hub.SubscribePortfolio(sessionID)
+		case "asset":
+			if msg.AssetID <= 0 {
+				return fmt.Errorf("asset_id is required for asset subscriptions")
+			}
+			s.Hub.SubscribeAsset(sessionID, msg.AssetID)
+		default:
+			return fmt.Errorf("invalid scope: use portfolio or asset")
+		}
+		return wsjson.Write(ctx, conn, serverMessage{
+			Type:    "subscribed",
+			Scope:   scope,
+			AssetID: msg.AssetID,
+		})
+	case "unsubscribe":
+		switch scope {
+		case "portfolio":
+			s.Hub.UnsubscribePortfolio(sessionID)
+		case "asset":
+			if msg.AssetID <= 0 {
+				return fmt.Errorf("asset_id is required for asset subscriptions")
+			}
+			s.Hub.UnsubscribeAsset(sessionID, msg.AssetID)
+		default:
+			return fmt.Errorf("invalid scope: use portfolio or asset")
+		}
+		return wsjson.Write(ctx, conn, serverMessage{
+			Type:    "unsubscribed",
+			Scope:   scope,
+			AssetID: msg.AssetID,
+		})
+	default:
+		return fmt.Errorf("invalid message type: use subscribe or unsubscribe")
+	}
+}
+
+func extractToken(r *http.Request) string {
+	if authz := strings.TrimSpace(r.Header.Get("Authorization")); authz != "" {
+		if strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+			return strings.TrimSpace(authz[7:])
+		}
+	}
+	if token := strings.TrimSpace(r.URL.Query().Get("token")); token != "" {
+		return token
+	}
+	return ""
 }

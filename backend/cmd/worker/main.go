@@ -11,6 +11,7 @@ import (
 	"asset-tracker/internal/config"
 	"asset-tracker/internal/db"
 	"asset-tracker/internal/prices"
+	"asset-tracker/internal/providers"
 )
 
 func main() {
@@ -28,8 +29,13 @@ func main() {
 	}
 	defer database.Close()
 
-	scheduler := prices.NewScheduler(5*time.Minute, func(ctx context.Context) error {
-		// TODO: load assets, compute effective refresh, poll providers, write prices.
+	providerSet := providers.NewFromConfig(cfg)
+	service := prices.NewService(database, providerSet.Stock, providerSet.Crypto)
+
+	scheduler := prices.NewScheduler(30*time.Second, func(ctx context.Context) error {
+		if err := service.Refresh(ctx); err != nil {
+			log.Printf("refresh error: %v", err)
+		}
 		return nil
 	})
 

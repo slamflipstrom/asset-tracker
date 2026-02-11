@@ -7,10 +7,18 @@ create type public.asset_type as enum ('crypto', 'stock');
 create table if not exists public.assets (
   id bigserial primary key,
   symbol text not null,
+  market_data_id text,
+  lookup_blockchain text,
+  lookup_address text,
   type public.asset_type not null,
   name text not null,
   created_at timestamptz not null default now(),
-  unique (symbol, type)
+  unique (symbol, type),
+  constraint assets_crypto_requires_market_lookup check (
+    type <> 'crypto'
+    or market_data_id is not null
+    or (lookup_blockchain is not null and lookup_address is not null)
+  )
 );
 
 create table if not exists public.profiles (
@@ -72,6 +80,7 @@ create table if not exists public.price_snapshots (
 create index if not exists lots_user_id_idx on public.lots (user_id);
 create index if not exists lots_asset_id_idx on public.lots (asset_id);
 create index if not exists lots_user_asset_idx on public.lots (user_id, asset_id);
+create unique index if not exists assets_crypto_market_data_id_idx on public.assets (market_data_id) where type = 'crypto' and market_data_id is not null;
 create index if not exists price_snapshots_asset_fetched_idx on public.price_snapshots (asset_id, fetched_at desc);
 
 -- Helper functions and triggers

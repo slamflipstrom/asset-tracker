@@ -9,10 +9,13 @@ import (
 )
 
 type Asset struct {
-	ID     int64
-	Symbol string
-	Type   string
-	Name   string
+	ID               int64
+	Symbol           string
+	MarketDataID     string
+	LookupBlockchain string
+	LookupAddress    string
+	Type             string
+	Name             string
 }
 
 type AppSettings struct {
@@ -21,10 +24,10 @@ type AppSettings struct {
 }
 
 type UserSettings struct {
-	UserID              string
-	RefreshIntervalSec  int
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	UserID             string
+	RefreshIntervalSec int
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 type Lot struct {
@@ -39,10 +42,13 @@ type Lot struct {
 }
 
 type TrackedAsset struct {
-	ID                   int64
-	Symbol               string
-	Type                 string
-	MinUserRefreshSec    int
+	ID                int64
+	Symbol            string
+	MarketDataID      string
+	LookupBlockchain  string
+	LookupAddress     string
+	Type              string
+	MinUserRefreshSec int
 }
 
 type PriceUpdate struct {
@@ -53,12 +59,12 @@ type PriceUpdate struct {
 }
 
 type Position struct {
-	UserID        string
-	AssetID       int64
-	TotalQty      float64
-	AvgCost       float64
-	CurrentPrice  sql.NullFloat64
-	UnrealizedPL  sql.NullFloat64
+	UserID       string
+	AssetID      int64
+	TotalQty     float64
+	AvgCost      float64
+	CurrentPrice sql.NullFloat64
+	UnrealizedPL sql.NullFloat64
 }
 
 type LotPerformance struct {
@@ -100,11 +106,11 @@ func (d *DB) FetchUserSettings(ctx context.Context, userID string) (UserSettings
 
 func (d *DB) FetchTrackedAssets(ctx context.Context) ([]TrackedAsset, error) {
 	rows, err := d.pool.Query(ctx, `
-		select a.id, a.symbol, a.type, min(us.refresh_interval_sec) as min_refresh_interval_sec
+		select a.id, a.symbol, coalesce(a.market_data_id, ''), coalesce(a.lookup_blockchain, ''), coalesce(a.lookup_address, ''), a.type, min(us.refresh_interval_sec) as min_refresh_interval_sec
 		from public.assets a
 		join public.lots l on l.asset_id = a.id
 		join public.user_settings us on us.user_id = l.user_id
-		group by a.id, a.symbol, a.type
+		group by a.id, a.symbol, a.market_data_id, a.lookup_blockchain, a.lookup_address, a.type
 		order by a.id
 	`)
 	if err != nil {
@@ -115,7 +121,7 @@ func (d *DB) FetchTrackedAssets(ctx context.Context) ([]TrackedAsset, error) {
 	var assets []TrackedAsset
 	for rows.Next() {
 		var asset TrackedAsset
-		if err := rows.Scan(&asset.ID, &asset.Symbol, &asset.Type, &asset.MinUserRefreshSec); err != nil {
+		if err := rows.Scan(&asset.ID, &asset.Symbol, &asset.MarketDataID, &asset.LookupBlockchain, &asset.LookupAddress, &asset.Type, &asset.MinUserRefreshSec); err != nil {
 			return nil, err
 		}
 		assets = append(assets, asset)
@@ -125,9 +131,9 @@ func (d *DB) FetchTrackedAssets(ctx context.Context) ([]TrackedAsset, error) {
 
 func (d *DB) SearchAssets(ctx context.Context, query string, assetType string, limit int) ([]Asset, error) {
 	rows, err := d.pool.Query(ctx, `
-		select id, symbol, type, name
+		select id, symbol, coalesce(market_data_id, ''), coalesce(lookup_blockchain, ''), coalesce(lookup_address, ''), type, name
 		from public.assets
-		where (symbol ilike $1 or name ilike $1)
+		where (symbol ilike $1 or name ilike $1 or coalesce(market_data_id, '') ilike $1)
 		and (case when $2 = '' then true else type = $2::public.asset_type end)
 		order by symbol
 		limit $3
@@ -140,7 +146,7 @@ func (d *DB) SearchAssets(ctx context.Context, query string, assetType string, l
 	var assets []Asset
 	for rows.Next() {
 		var asset Asset
-		if err := rows.Scan(&asset.ID, &asset.Symbol, &asset.Type, &asset.Name); err != nil {
+		if err := rows.Scan(&asset.ID, &asset.Symbol, &asset.MarketDataID, &asset.LookupBlockchain, &asset.LookupAddress, &asset.Type, &asset.Name); err != nil {
 			return nil, err
 		}
 		assets = append(assets, asset)

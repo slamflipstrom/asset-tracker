@@ -14,3 +14,11 @@ This folder contains two services:
 ## Notes
 - This is scaffolding only; provider clients, JWT verification, and SQL queries are stubs.
 - We'll add provider integrations and concrete DB queries next.
+
+## Crypto provider (v1)
+- Set `CRYPTO_PROVIDER_NAME=mobula` (or `coingecko`, `coingecko-pro`).
+- Set `CRYPTO_PROVIDER_API_KEY`.
+- Optional: set `CRYPTO_PROVIDER_BASE_URL`.
+- Store ticker in `assets.symbol` (for example, `BTC`).
+- Store provider lookup id in `assets.market_data_id`.
+- For Mobula, use the Mobula `id` as `market_data_id`.

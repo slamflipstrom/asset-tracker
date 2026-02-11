@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"asset-tracker/internal/auth"
 	"asset-tracker/internal/config"
 	"asset-tracker/internal/ws"
 	"github.com/go-chi/chi/v5"
@@ -22,7 +23,8 @@ func main() {
 
 	router := chi.NewRouter()
 	hub := ws.NewHub()
-	server := ws.NewServer(hub)
+	verifier := auth.NewSupabaseVerifier(cfg.SupabaseURL, cfg.SupabaseServiceKey)
+	server := ws.NewServer(hub, verifier)
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

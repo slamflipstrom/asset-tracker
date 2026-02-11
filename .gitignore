@@ -10,6 +10,7 @@
 # Go build/cache
 bin/
 obj/
+.gocache/
 *.log
 
 # Supabase

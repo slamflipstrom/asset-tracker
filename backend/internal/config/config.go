@@ -13,7 +13,11 @@ type Config struct {
 	SupabaseServiceKey    string
 	SupabaseJWKSURL       string
 	StockProviderAPIKey   string
+	StockProviderName     string
+	StockProviderBaseURL  string
 	CryptoProviderAPIKey  string
+	CryptoProviderName    string
+	CryptoProviderBaseURL string
 	WSAllowedOrigins      []string
 	Port                  string
 	LogLevel              string
@@ -21,15 +25,19 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		DatabaseURL:          os.Getenv("DATABASE_URL"),
-		SupabaseURL:          os.Getenv("SUPABASE_URL"),
-		SupabaseServiceKey:   os.Getenv("SUPABASE_SERVICE_ROLE_KEY"),
-		SupabaseJWKSURL:      os.Getenv("SUPABASE_JWKS_URL"),
-		StockProviderAPIKey:  os.Getenv("STOCK_PROVIDER_API_KEY"),
-		CryptoProviderAPIKey: os.Getenv("CRYPTO_PROVIDER_API_KEY"),
-		Port:                 envDefault("PORT", "8080"),
-		LogLevel:             envDefault("LOG_LEVEL", "info"),
-		WSAllowedOrigins:     splitCSV(os.Getenv("WS_ALLOWED_ORIGINS")),
+		DatabaseURL:           os.Getenv("DATABASE_URL"),
+		SupabaseURL:           os.Getenv("SUPABASE_URL"),
+		SupabaseServiceKey:    os.Getenv("SUPABASE_SERVICE_ROLE_KEY"),
+		SupabaseJWKSURL:       os.Getenv("SUPABASE_JWKS_URL"),
+		StockProviderAPIKey:   os.Getenv("STOCK_PROVIDER_API_KEY"),
+		StockProviderName:     os.Getenv("STOCK_PROVIDER_NAME"),
+		StockProviderBaseURL:  os.Getenv("STOCK_PROVIDER_BASE_URL"),
+		CryptoProviderAPIKey:  os.Getenv("CRYPTO_PROVIDER_API_KEY"),
+		CryptoProviderName:    os.Getenv("CRYPTO_PROVIDER_NAME"),
+		CryptoProviderBaseURL: os.Getenv("CRYPTO_PROVIDER_BASE_URL"),
+		Port:                  envDefault("PORT", "8080"),
+		LogLevel:              envDefault("LOG_LEVEL", "info"),
+		WSAllowedOrigins:      splitCSV(os.Getenv("WS_ALLOWED_ORIGINS")),
 	}
 
 	if cfg.DatabaseURL == "" {

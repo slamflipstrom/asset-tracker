@@ -1,12 +1,15 @@
 package ws
 
 import (
+	"fmt"
 	"sync"
 )
 
 type Subscriber struct {
-	UserID   string
-	AssetIDs map[int64]struct{}
+	SessionID string
+	UserID    string
+	Portfolio bool
+	AssetIDs  map[int64]struct{}
 }
 
 type Hub struct {
@@ -18,35 +21,63 @@ func NewHub() *Hub {
 	return &Hub{subscribers: make(map[string]*Subscriber)}
 }
 
-func (h *Hub) Add(userID string) {
+func (h *Hub) Add(sessionID, userID string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if _, ok := h.subscribers[userID]; !ok {
-		h.subscribers[userID] = &Subscriber{UserID: userID, AssetIDs: map[int64]struct{}{}}
+	if sessionID == "" || userID == "" {
+		return fmt.Errorf("sessionID and userID are required")
 	}
+	if _, ok := h.subscribers[sessionID]; ok {
+		return fmt.Errorf("session already exists")
+	}
+	h.subscribers[sessionID] = &Subscriber{
+		SessionID: sessionID,
+		UserID:    userID,
+		AssetIDs:  map[int64]struct{}{},
+	}
+	return nil
 }
 
-func (h *Hub) Remove(userID string) {
+func (h *Hub) Remove(sessionID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	delete(h.subscribers, userID)
+	delete(h.subscribers, sessionID)
 }
 
-func (h *Hub) SubscribeAsset(userID string, assetID int64) {
+func (h *Hub) SubscribePortfolio(sessionID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	sub, ok := h.subscribers[userID]
+	sub, ok := h.subscribers[sessionID]
 	if !ok {
-		sub = &Subscriber{UserID: userID, AssetIDs: map[int64]struct{}{}}
-		h.subscribers[userID] = sub
+		return
+	}
+	sub.Portfolio = true
+}
+
+func (h *Hub) UnsubscribePortfolio(sessionID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	sub, ok := h.subscribers[sessionID]
+	if !ok {
+		return
+	}
+	sub.Portfolio = false
+}
+
+func (h *Hub) SubscribeAsset(sessionID string, assetID int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	sub, ok := h.subscribers[sessionID]
+	if !ok {
+		return
 	}
 	sub.AssetIDs[assetID] = struct{}{}
 }
 
-func (h *Hub) UnsubscribeAsset(userID string, assetID int64) {
+func (h *Hub) UnsubscribeAsset(sessionID string, assetID int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	sub, ok := h.subscribers[userID]
+	sub, ok := h.subscribers[sessionID]
 	if !ok {
 		return
 	}
