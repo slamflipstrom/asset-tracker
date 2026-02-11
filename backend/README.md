@@ -22,3 +22,8 @@ This folder contains two services:
 - Store ticker in `assets.symbol` (for example, `BTC`).
 - Store provider lookup id in `assets.market_data_id`.
 - For Mobula, use the Mobula `id` as `market_data_id`.
+
+## Fly deployment
+- WebSocket app config: `/Users/samlindstrom/Code/asset-tracker/fly.ws.toml`
+- Worker app config: `/Users/samlindstrom/Code/asset-tracker/fly.worker.toml`
+- Deployment runbook: `/Users/samlindstrom/Code/asset-tracker/docs/fly-deploy.md`

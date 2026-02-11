@@ -1,0 +1,10 @@
+app = "asset-worker"
+primary_region = "ord"
+
+[build]
+  dockerfile = "backend/Dockerfile.worker"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
