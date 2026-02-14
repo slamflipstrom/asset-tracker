@@ -39,10 +39,38 @@ func TestMobulaProviderFetchQuotes_DataArray(t *testing.T) {
 	}
 }
 
+func TestMobulaProviderFetchQuotes_DataArrayPrefersKeyOverID(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("assets"); got != "bitcoin" {
+			t.Fatalf("expected assets query bitcoin, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"dataArray":[{"key":"bitcoin","id":1,"price":88.8}]}`))
+	}))
+	defer ts.Close()
+
+	p := NewMobulaProvider(ts.URL, "test-key")
+	quotes, err := p.FetchQuotes(context.Background(), []string{"bitcoin"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(quotes) != 1 {
+		t.Fatalf("expected 1 quote, got %d", len(quotes))
+	}
+	if quotes[0].LookupKey != "bitcoin" {
+		t.Fatalf("expected lookup key bitcoin, got %+v", quotes[0])
+	}
+}
+
 func TestMobulaProviderFetchQuotes_Data(t *testing.T) {
 	t.Parallel()
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("assets"); got != "bitcoin" {
+			t.Fatalf("expected assets query bitcoin, got %q", got)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[{"id":"bitcoin","price":123.45}]}`))
 	}))
@@ -58,6 +86,80 @@ func TestMobulaProviderFetchQuotes_Data(t *testing.T) {
 	}
 	if quotes[0].LookupKey != "bitcoin" || quotes[0].Price != 123.45 {
 		t.Fatalf("unexpected quote: %+v", quotes[0])
+	}
+}
+
+func TestMobulaProviderFetchQuotes_NormalizesKeyCase(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"key":"Bitcoin","price":123.45}]}`))
+	}))
+	defer ts.Close()
+
+	p := NewMobulaProvider(ts.URL, "test-key")
+	quotes, err := p.FetchQuotes(context.Background(), []string{"bitcoin"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(quotes) != 1 {
+		t.Fatalf("expected 1 quote, got %d", len(quotes))
+	}
+	if quotes[0].LookupKey != "bitcoin" {
+		t.Fatalf("expected lookup key bitcoin, got %q", quotes[0].LookupKey)
+	}
+}
+
+func TestMobulaProviderFetchQuotes_DataObject(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"id":"bitcoin","price":123.45}}`))
+	}))
+	defer ts.Close()
+
+	p := NewMobulaProvider(ts.URL, "test-key")
+	quotes, err := p.FetchQuotes(context.Background(), []string{"bitcoin"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(quotes) != 1 {
+		t.Fatalf("expected 1 quote, got %d", len(quotes))
+	}
+	if quotes[0].LookupKey != "bitcoin" || quotes[0].Price != 123.45 {
+		t.Fatalf("unexpected quote: %+v", quotes[0])
+	}
+}
+
+func TestMobulaProviderFetchQuotes_DataKeyedObject(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"bitcoin":{"price":123.45},"ethereum":456.78}}`))
+	}))
+	defer ts.Close()
+
+	p := NewMobulaProvider(ts.URL, "test-key")
+	quotes, err := p.FetchQuotes(context.Background(), []string{"bitcoin", "ethereum"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(quotes) != 2 {
+		t.Fatalf("expected 2 quotes, got %d", len(quotes))
+	}
+
+	got := map[string]float64{}
+	for _, q := range quotes {
+		got[q.LookupKey] = q.Price
+	}
+	if got["bitcoin"] != 123.45 {
+		t.Fatalf("expected bitcoin price 123.45, got %v", got["bitcoin"])
+	}
+	if got["ethereum"] != 456.78 {
+		t.Fatalf("expected ethereum price 456.78, got %v", got["ethereum"])
 	}
 }
 
