@@ -20,7 +20,7 @@
 ## Package Responsibilities
 
 - `internal/config`
-  - Load env vars and validate required settings.
+  - Load env vars and validate required settings by service mode.
 - `internal/db`
   - Query and upsert data in Supabase Postgres.
   - Shared SQL helpers for assets, lots, prices, settings.
@@ -31,7 +31,7 @@
   - Refresh scheduler.
   - Asset refresh planning using per-user intervals and global min/max.
 - `internal/auth`
-  - Supabase JWT verification via JWKS.
+  - Supabase token verification via `/auth/v1/user`.
 - `internal/ws`
   - WebSocket hub, subscription registry, fan-out.
 
@@ -49,16 +49,18 @@
 - Client subscribes to `portfolio` or `asset` scope.
 - Server pushes `price_update`, `position_update`, `lot_update` events.
 
-## Required Env Vars (Initial)
+## Required Env Vars
 
-- `SUPABASE_URL`
-- `SUPABASE_SECRET_KEY`
-- `SUPABASE_JWKS_URL`
-- `CRYPTO_PROVIDER_NAME`
-- `STOCK_PROVIDER_API_KEY`
-- `CRYPTO_PROVIDER_API_KEY`
-- `CRYPTO_PROVIDER_BASE_URL`
-- `WS_ALLOWED_ORIGINS`
+- Worker (`cmd/worker`)
+  - `DATABASE_URL`
+  - `CRYPTO_PROVIDER_NAME`
+  - `CRYPTO_PROVIDER_API_KEY`
+  - optional `CRYPTO_PROVIDER_BASE_URL`
+- WS (`cmd/ws`)
+  - `DATABASE_URL`
+  - `SUPABASE_URL`
+  - `SUPABASE_SECRET_KEY`
+  - optional `PORT` (defaults to `8080`)
 
 ## Fly Apps
 

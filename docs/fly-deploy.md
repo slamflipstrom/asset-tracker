@@ -18,8 +18,8 @@ This project deploys as two Fly apps:
    - `fly apps create asset-ws`
    - `fly apps create asset-worker`
 2. Set secrets for both apps (adjust as needed):
-   - `fly secrets set --app asset-ws DATABASE_URL=... SUPABASE_URL=... SUPABASE_SECRET_KEY=... CRYPTO_PROVIDER_NAME=mobula CRYPTO_PROVIDER_API_KEY=...`
-   - `fly secrets set --app asset-worker DATABASE_URL=... SUPABASE_URL=... SUPABASE_SECRET_KEY=... CRYPTO_PROVIDER_NAME=mobula CRYPTO_PROVIDER_API_KEY=...`
+   - `fly secrets set --app asset-ws DATABASE_URL=... SUPABASE_URL=... SUPABASE_SECRET_KEY=...`
+   - `fly secrets set --app asset-worker DATABASE_URL=... CRYPTO_PROVIDER_NAME=mobula CRYPTO_PROVIDER_API_KEY=...`
 
 ## Deploy
 

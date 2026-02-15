@@ -64,9 +64,16 @@ Prereqs:
    - `pnpm dev`
 4. Optional backend services:
    - In `backend/`, set required env vars:
-   - `DATABASE_URL` (required by both binaries)
-   - `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (required by `ws`)
-   - Provider vars for worker, e.g. `CRYPTO_PROVIDER_NAME`, `CRYPTO_PROVIDER_API_KEY`
+   - Worker (`go run ./cmd/worker`):
+   - `DATABASE_URL`
+   - `CRYPTO_PROVIDER_NAME`
+   - `CRYPTO_PROVIDER_API_KEY`
+   - optional `CRYPTO_PROVIDER_BASE_URL`
+   - WS server (`go run ./cmd/ws`):
+   - `DATABASE_URL`
+   - `SUPABASE_URL`
+   - `SUPABASE_SECRET_KEY`
+   - optional `PORT` (defaults to `8080`)
    - Run worker: `go run ./cmd/worker`
    - Run WebSocket: `go run ./cmd/ws`
 
