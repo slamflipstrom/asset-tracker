@@ -6,29 +6,40 @@ import (
 	"strings"
 )
 
-// Config holds service configuration for both worker and WS server.
+type Mode string
+
+const (
+	ModeWorker Mode = "worker"
+	ModeWS     Mode = "ws"
+)
+
+// Config holds service configuration shared by worker and WS server.
 type Config struct {
 	DatabaseURL           string
 	SupabaseURL           string
-	SupabaseServiceKey    string
-	SupabaseJWKSURL       string
+	SupabaseSecretKey     string
 	StockProviderAPIKey   string
 	StockProviderName     string
 	StockProviderBaseURL  string
 	CryptoProviderAPIKey  string
 	CryptoProviderName    string
 	CryptoProviderBaseURL string
-	WSAllowedOrigins      []string
 	Port                  string
-	LogLevel              string
 }
 
-func Load() (Config, error) {
+func LoadForWorker() (Config, error) {
+	return load(ModeWorker)
+}
+
+func LoadForWS() (Config, error) {
+	return load(ModeWS)
+}
+
+func load(mode Mode) (Config, error) {
 	cfg := Config{
 		DatabaseURL:           os.Getenv("DATABASE_URL"),
 		SupabaseURL:           os.Getenv("SUPABASE_URL"),
-		SupabaseServiceKey:    os.Getenv("SUPABASE_SECRET_KEY"),
-		SupabaseJWKSURL:       os.Getenv("SUPABASE_JWKS_URL"),
+		SupabaseSecretKey:     os.Getenv("SUPABASE_SECRET_KEY"),
 		StockProviderAPIKey:   os.Getenv("STOCK_PROVIDER_API_KEY"),
 		StockProviderName:     os.Getenv("STOCK_PROVIDER_NAME"),
 		StockProviderBaseURL:  os.Getenv("STOCK_PROVIDER_BASE_URL"),
@@ -36,13 +47,26 @@ func Load() (Config, error) {
 		CryptoProviderName:    os.Getenv("CRYPTO_PROVIDER_NAME"),
 		CryptoProviderBaseURL: os.Getenv("CRYPTO_PROVIDER_BASE_URL"),
 		Port:                  envDefault("PORT", "8080"),
-		LogLevel:              envDefault("LOG_LEVEL", "info"),
-		WSAllowedOrigins:      splitCSV(os.Getenv("WS_ALLOWED_ORIGINS")),
 	}
 
-	if cfg.DatabaseURL == "" {
-		return cfg, errors.New("DATABASE_URL is required")
+	var validationErrs []string
+	requireEnv("DATABASE_URL", cfg.DatabaseURL, &validationErrs)
+
+	switch mode {
+	case ModeWorker:
+		requireEnv("CRYPTO_PROVIDER_NAME", cfg.CryptoProviderName, &validationErrs)
+		requireEnv("CRYPTO_PROVIDER_API_KEY", cfg.CryptoProviderAPIKey, &validationErrs)
+	case ModeWS:
+		requireEnv("SUPABASE_URL", cfg.SupabaseURL, &validationErrs)
+		requireEnv("SUPABASE_SECRET_KEY", cfg.SupabaseSecretKey, &validationErrs)
+	default:
+		validationErrs = append(validationErrs, "unknown service mode")
 	}
+
+	if len(validationErrs) > 0 {
+		return cfg, errors.New(strings.Join(validationErrs, "; "))
+	}
+
 	return cfg, nil
 }
 
@@ -53,17 +77,8 @@ func envDefault(key, fallback string) string {
 	return fallback
 }
 
-func splitCSV(value string) []string {
-	if value == "" {
-		return nil
+func requireEnv(name, value string, errs *[]string) {
+	if strings.TrimSpace(value) == "" {
+		*errs = append(*errs, name+" is required")
 	}
-	parts := strings.Split(value, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
 }

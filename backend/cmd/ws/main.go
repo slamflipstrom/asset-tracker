@@ -16,14 +16,14 @@ import (
 )
 
 func main() {
-	cfg, err := config.Load()
+	cfg, err := config.LoadForWS()
 	if err != nil {
 		log.Fatalf("config error: %v", err)
 	}
 
 	router := chi.NewRouter()
 	hub := ws.NewHub()
-	verifier := auth.NewSupabaseVerifier(cfg.SupabaseURL, cfg.SupabaseServiceKey)
+	verifier := auth.NewSupabaseVerifier(cfg.SupabaseURL, cfg.SupabaseSecretKey)
 	server := ws.NewServer(hub, verifier)
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {

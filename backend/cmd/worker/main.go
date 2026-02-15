@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	cfg, err := config.Load()
+	cfg, err := config.LoadForWorker()
 	if err != nil {
 		log.Fatalf("config error: %v", err)
 	}
