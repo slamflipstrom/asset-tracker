@@ -9,6 +9,7 @@ Asset Tracker is a Go backend for portfolio tracking with:
 ## Repository Layout
 
 - `backend/`: Go services and internal packages
+- `frontend/`: React UI for auth, portfolio, and lots management
 - `supabase/`: schema, RLS policies, and migrations
 - `docs/`: deployment and architecture notes
 - `fly.ws.toml`, `fly.worker.toml`: Fly app configs
@@ -47,6 +48,19 @@ Prereqs: Go 1.24+, Supabase CLI (for local DB), and provider API keys.
 3. Run services:
    - Worker: `go run ./cmd/worker`
    - WebSocket: `go run ./cmd/ws`
+
+## Frontend Development
+
+The UI is in `frontend/` and connects directly to Supabase in v1.
+
+1. In `frontend/`, create env vars:
+   - `cp .env.example .env.local`
+   - Set `VITE_SUPABASE_URL` and:
+   - `VITE_SUPABASE_PUBLISHABLE_KEY` (hosted Supabase, recommended), or
+   - `VITE_SUPABASE_ANON_KEY` (local/self-hosted fallback)
+2. Start UI:
+   - `pnpm install`
+   - `pnpm dev`
 
 ## Test
 
