@@ -3,6 +3,7 @@ package prices
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -37,19 +38,41 @@ func NewService(database *db.DB, stock providers.StockProvider, crypto providers
 }
 
 func (s *Service) Refresh(ctx context.Context) error {
+	start := time.Now()
+	trackedCount := 0
+	dueCount := 0
+	quoteCount := 0
+	updateCount := 0
+	var refreshErr error
+	defer func() {
+		log.Printf(
+			"refresh cycle: tracked=%d due=%d quotes=%d updates_written=%d duration=%s err=%v",
+			trackedCount,
+			dueCount,
+			quoteCount,
+			updateCount,
+			time.Since(start).Round(time.Millisecond),
+			refreshErr,
+		)
+	}()
+
 	now := time.Now().UTC()
 
 	settings, err := s.db.FetchAppSettings(ctx)
 	if err != nil {
+		refreshErr = err
 		return err
 	}
 
 	tracked, err := s.db.FetchTrackedAssets(ctx)
 	if err != nil {
+		refreshErr = err
 		return err
 	}
+	trackedCount = len(tracked)
 
 	dueAssets := s.reconcile(now, settings, tracked)
+	dueCount = len(dueAssets)
 	if len(dueAssets) == 0 {
 		return nil
 	}
@@ -77,6 +100,7 @@ func (s *Service) Refresh(ctx context.Context) error {
 		if err != nil {
 			errs = append(errs, err)
 		} else {
+			quoteCount += len(quotes)
 			updates = append(updates, toUpdates(quotes, stockMap, now)...)
 		}
 	}
@@ -86,12 +110,15 @@ func (s *Service) Refresh(ctx context.Context) error {
 		if err != nil {
 			errs = append(errs, err)
 		} else {
+			quoteCount += len(quotes)
 			updates = append(updates, toUpdates(quotes, cryptoMap, now)...)
 		}
 	}
 
+	updateCount = len(updates)
 	if len(updates) == 0 {
-		return errors.Join(errs...)
+		refreshErr = errors.Join(errs...)
+		return refreshErr
 	}
 
 	if err := s.db.UpsertCurrentPrices(ctx, updates); err != nil {
@@ -107,7 +134,8 @@ func (s *Service) Refresh(ctx context.Context) error {
 		}
 	}
 
-	return errors.Join(errs...)
+	refreshErr = errors.Join(errs...)
+	return refreshErr
 }
 
 func (s *Service) reconcile(now time.Time, settings db.AppSettings, tracked []db.TrackedAsset) []dueAsset {
