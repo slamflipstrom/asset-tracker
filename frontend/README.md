@@ -36,6 +36,7 @@ pnpm dev
 
 ## Notes
 
-- Auto refresh defaults to every 30s (`VITE_REFRESH_MS`).
+- Uses Supabase Realtime subscriptions on `public.lots` and `public.prices_current` with polling fallback (`VITE_REFRESH_MS`, default 30s).
+- If live updates never connect, enable Realtime for those tables in your Supabase project.
 - Editing a lot currently updates quantity, unit cost, and purchase date.
 - Asset is locked during edit to avoid accidental asset re-linking.

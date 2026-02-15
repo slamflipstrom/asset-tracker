@@ -19,6 +19,11 @@ const REFRESH_MS = (() => {
   return parsed;
 })();
 
+const REALTIME_DEBOUNCE_MS = 500;
+
+type RealtimeStatus = 'off' | 'connecting' | 'live' | 'error';
+type AuthMode = 'signin' | 'signup';
+
 function formatMoney(value: number | null): string {
   if (value === null) {
     return '--';
@@ -44,7 +49,18 @@ function toDateInputValue(isoTimestamp: string): string {
   return date.toISOString().slice(0, 10);
 }
 
-type AuthMode = 'signin' | 'signup';
+function realtimeStatusLabel(status: RealtimeStatus): string {
+  if (status === 'live') {
+    return 'Live updates connected';
+  }
+  if (status === 'connecting') {
+    return 'Connecting live updates...';
+  }
+  if (status === 'error') {
+    return 'Live updates unavailable (polling fallback active)';
+  }
+  return 'Live updates offline';
+}
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -65,6 +81,7 @@ export function App() {
   const [dataLoading, setDataLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>('off');
 
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -148,16 +165,76 @@ export function App() {
     if (!session) {
       setPositions([]);
       setLots([]);
+      setRealtimeStatus('off');
       return;
     }
 
+    const supabase = getSupabase();
+    let active = true;
+    let refreshTimeout: number | undefined;
+
+    const scheduleRefresh = () => {
+      if (!active || refreshTimeout !== undefined) {
+        return;
+      }
+
+      refreshTimeout = window.setTimeout(() => {
+        refreshTimeout = undefined;
+        void loadPortfolio(true);
+      }, REALTIME_DEBOUNCE_MS);
+    };
+
+    setRealtimeStatus('connecting');
     void loadPortfolio(false);
+
+    const channel = supabase
+      .channel(`portfolio-sync:${session.user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lots',
+          filter: `user_id=eq.${session.user.id}`
+        },
+        scheduleRefresh
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'prices_current'
+        },
+        scheduleRefresh
+      )
+      .subscribe((status) => {
+        if (!active) {
+          return;
+        }
+
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('live');
+          return;
+        }
+
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setRealtimeStatus('error');
+        }
+      });
+
     const intervalID = window.setInterval(() => {
       void loadPortfolio(true);
     }, REFRESH_MS);
 
     return () => {
+      active = false;
+      setRealtimeStatus('off');
+      if (refreshTimeout !== undefined) {
+        window.clearTimeout(refreshTimeout);
+      }
       window.clearInterval(intervalID);
+      void supabase.removeChannel(channel);
     };
   }, [session, loadPortfolio]);
 
@@ -480,7 +557,9 @@ export function App() {
       <section className="panel">
         <div className="section-head">
           <h2>Positions</h2>
-          <p>Auto-refresh every {Math.round(REFRESH_MS / 1000)}s</p>
+          <p>
+            {realtimeStatusLabel(realtimeStatus)}. Polling fallback every {Math.round(REFRESH_MS / 1000)}s
+          </p>
         </div>
 
         {dataLoading ? (
@@ -513,11 +592,7 @@ export function App() {
                     <td>{formatMoney(position.currentPrice)}</td>
                     <td
                       className={
-                        position.unrealizedPL === null
-                          ? ''
-                          : position.unrealizedPL >= 0
-                            ? 'positive'
-                            : 'negative'
+                        position.unrealizedPL === null ? '' : position.unrealizedPL >= 0 ? 'positive' : 'negative'
                       }
                     >
                       {formatMoney(position.unrealizedPL)}
@@ -643,7 +718,11 @@ export function App() {
                         <button type="button" className="button-link" onClick={() => handleEditLot(lot)}>
                           Edit
                         </button>
-                        <button type="button" className="button-link danger" onClick={() => void handleDeleteLot(lot.id)}>
+                        <button
+                          type="button"
+                          className="button-link danger"
+                          onClick={() => void handleDeleteLot(lot.id)}
+                        >
                           Delete
                         </button>
                       </div>
