@@ -116,3 +116,5 @@ If your environment blocks default Go cache writes, set:
   - `fly.worker.toml`
 - Deployment guide:
   - `docs/fly-deploy.md`
+- Planning:
+  - `docs/v1-checkpoint-plan.md`
