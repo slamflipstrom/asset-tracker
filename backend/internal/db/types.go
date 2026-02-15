@@ -5,13 +5,20 @@ import (
 	"time"
 )
 
+type AssetType string
+
+const (
+	AssetTypeCrypto AssetType = "crypto"
+	AssetTypeStock  AssetType = "stock"
+)
+
 type Asset struct {
 	ID               int64
 	Symbol           string
 	MarketDataID     string
 	LookupBlockchain string
 	LookupAddress    string
-	Type             string
+	Type             AssetType
 	Name             string
 }
 
@@ -44,7 +51,7 @@ type TrackedAsset struct {
 	MarketDataID      string
 	LookupBlockchain  string
 	LookupAddress     string
-	Type              string
+	Type              AssetType
 	MinUserRefreshSec int
 }
 

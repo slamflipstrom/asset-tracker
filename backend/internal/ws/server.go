@@ -18,6 +18,23 @@ type Server struct {
 	Verifier auth.Verifier
 }
 
+type messageType string
+type messageScope string
+type messageAction string
+
+const (
+	messageTypeReady        messageType = "ready"
+	messageTypeError        messageType = "error"
+	messageTypeSubscribed   messageType = "subscribed"
+	messageTypeUnsubscribed messageType = "unsubscribed"
+
+	messageScopePortfolio messageScope = "portfolio"
+	messageScopeAsset     messageScope = "asset"
+
+	messageActionSubscribe   messageAction = "subscribe"
+	messageActionUnsubscribe messageAction = "unsubscribe"
+)
+
 type clientMessage struct {
 	Type    string `json:"type"`
 	Scope   string `json:"scope"`
@@ -65,7 +82,7 @@ func (s *Server) Handler() http.HandlerFunc {
 		sessionID := claims.Subject + ":" + strconv.FormatInt(time.Now().UnixNano(), 10)
 		if err := s.Hub.Add(sessionID, claims.Subject); err != nil {
 			_ = wsjson.Write(ctx, conn, serverMessage{
-				Type:    "error",
+				Type:    string(messageTypeError),
 				Message: "failed to initialize websocket session",
 			})
 			_ = conn.Close(websocket.StatusInternalError, "failed to initialize session")
@@ -74,7 +91,7 @@ func (s *Server) Handler() http.HandlerFunc {
 		defer s.Hub.Remove(sessionID)
 
 		if err := wsjson.Write(ctx, conn, serverMessage{
-			Type:   "ready",
+			Type:   string(messageTypeReady),
 			UserID: claims.Subject,
 		}); err != nil {
 			_ = conn.Close(websocket.StatusInternalError, "failed to write ready message")
@@ -95,7 +112,7 @@ func (s *Server) Handler() http.HandlerFunc {
 
 			if err := s.handleMessage(ctx, conn, sessionID, msg); err != nil {
 				_ = wsjson.Write(ctx, conn, serverMessage{
-					Type:    "error",
+					Type:    string(messageTypeError),
 					Message: err.Error(),
 				})
 			}
@@ -104,15 +121,15 @@ func (s *Server) Handler() http.HandlerFunc {
 }
 
 func (s *Server) handleMessage(ctx context.Context, conn *websocket.Conn, sessionID string, msg clientMessage) error {
-	action := strings.ToLower(strings.TrimSpace(msg.Type))
-	scope := strings.ToLower(strings.TrimSpace(msg.Scope))
+	action := messageAction(strings.ToLower(strings.TrimSpace(msg.Type)))
+	scope := messageScope(strings.ToLower(strings.TrimSpace(msg.Scope)))
 
 	switch action {
-	case "subscribe":
+	case messageActionSubscribe:
 		switch scope {
-		case "portfolio":
+		case messageScopePortfolio:
 			s.Hub.SubscribePortfolio(sessionID)
-		case "asset":
+		case messageScopeAsset:
 			if msg.AssetID <= 0 {
 				return fmt.Errorf("asset_id is required for asset subscriptions")
 			}
@@ -121,15 +138,15 @@ func (s *Server) handleMessage(ctx context.Context, conn *websocket.Conn, sessio
 			return fmt.Errorf("invalid scope: use portfolio or asset")
 		}
 		return wsjson.Write(ctx, conn, serverMessage{
-			Type:    "subscribed",
-			Scope:   scope,
+			Type:    string(messageTypeSubscribed),
+			Scope:   string(scope),
 			AssetID: msg.AssetID,
 		})
-	case "unsubscribe":
+	case messageActionUnsubscribe:
 		switch scope {
-		case "portfolio":
+		case messageScopePortfolio:
 			s.Hub.UnsubscribePortfolio(sessionID)
-		case "asset":
+		case messageScopeAsset:
 			if msg.AssetID <= 0 {
 				return fmt.Errorf("asset_id is required for asset subscriptions")
 			}
@@ -138,8 +155,8 @@ func (s *Server) handleMessage(ctx context.Context, conn *websocket.Conn, sessio
 			return fmt.Errorf("invalid scope: use portfolio or asset")
 		}
 		return wsjson.Write(ctx, conn, serverMessage{
-			Type:    "unsubscribed",
-			Scope:   scope,
+			Type:    string(messageTypeUnsubscribed),
+			Scope:   string(scope),
 			AssetID: msg.AssetID,
 		})
 	default:

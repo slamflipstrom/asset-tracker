@@ -85,9 +85,9 @@ func (s *Service) Refresh(ctx context.Context) error {
 			continue
 		}
 		switch asset.Type {
-		case "stock":
+		case db.AssetTypeStock:
 			stockMap[key] = asset
-		case "crypto":
+		case db.AssetTypeCrypto:
 			cryptoMap[key] = asset
 		}
 	}
@@ -210,7 +210,7 @@ func toUpdates(quotes []providers.AssetQuote, assets map[string]dueAsset, fetche
 
 func lookupKeyForAsset(asset db.TrackedAsset) string {
 	switch asset.Type {
-	case "crypto":
+	case db.AssetTypeCrypto:
 		if marketDataID := strings.TrimSpace(asset.MarketDataID); marketDataID != "" {
 			return strings.ToLower(marketDataID)
 		}
