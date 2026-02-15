@@ -27,7 +27,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		DatabaseURL:           os.Getenv("DATABASE_URL"),
 		SupabaseURL:           os.Getenv("SUPABASE_URL"),
-		SupabaseServiceKey:    os.Getenv("SUPABASE_SERVICE_ROLE_KEY"),
+		SupabaseServiceKey:    os.Getenv("SUPABASE_SECRET_KEY"),
 		SupabaseJWKSURL:       os.Getenv("SUPABASE_JWKS_URL"),
 		StockProviderAPIKey:   os.Getenv("STOCK_PROVIDER_API_KEY"),
 		StockProviderName:     os.Getenv("STOCK_PROVIDER_NAME"),
