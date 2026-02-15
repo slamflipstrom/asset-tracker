@@ -34,9 +34,24 @@ pnpm install
 pnpm dev
 ```
 
+## Scripts
+
+- `pnpm dev`: Start local dev server
+- `pnpm build`: Type-check and build production assets
+- `pnpm preview`: Preview the production build locally
+
 ## Notes
 
 - Uses Supabase Realtime subscriptions on `public.lots` and `public.prices_current` with polling fallback (`VITE_REFRESH_MS`, default 30s).
 - If live updates never connect, enable Realtime for those tables in your Supabase project.
 - Editing a lot currently updates quantity, unit cost, and purchase date.
 - Asset is locked during edit to avoid accidental asset re-linking.
+
+## Troubleshooting
+
+- `Invalid API key` on login:
+  - Your project URL and key likely do not match. Use a key from the same Supabase project as `VITE_SUPABASE_URL`.
+- `Invalid login credentials` on local:
+  - The user usually does not exist in the local project yet. Use the sign-up flow first, then sign in.
+- Prices are empty:
+  - `positions_view` can return `null` `current_price` until `prices_current` is populated by the worker.

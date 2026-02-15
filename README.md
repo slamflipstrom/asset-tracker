@@ -1,10 +1,11 @@
 # Asset Tracker
 
-Asset Tracker is a Go backend for portfolio tracking with:
+Asset Tracker is a portfolio tracker with a Go backend and React frontend:
 
 - a **worker** that refreshes market prices into Postgres
 - a **WebSocket service** that authenticates users and manages subscriptions
 - a **Supabase schema** for assets, lots, prices, and portfolio views
+- a **frontend UI** for auth, portfolio overview, and lots CRUD
 
 ## Repository Layout
 
@@ -25,6 +26,10 @@ Asset Tracker is a Go backend for portfolio tracking with:
   - Exposes `GET /health` and `GET /ws`
   - Verifies Supabase bearer tokens via `/auth/v1/user`
   - Supports subscribe/unsubscribe messages for `portfolio` and `asset` scopes
+- `frontend/`
+  - React + Vite app with Supabase Auth
+  - Uses `positions_view` and `lots` for portfolio + lot management
+  - Uses Supabase Realtime (`lots`, `prices_current`) with polling fallback
 
 ## Providers
 
@@ -36,18 +41,34 @@ Asset Tracker is a Go backend for portfolio tracking with:
 
 ## Local Development
 
-Prereqs: Go 1.24+, Supabase CLI (for local DB), and provider API keys.
+Prereqs:
+- Go 1.24+
+- Node.js 20+
+- pnpm 10+
+- Docker (required for `supabase start`)
+- Supabase CLI
+- Provider API keys (worker)
 
-1. Start Supabase locally (from repo root):
+1. Start local Supabase (repo root):
    - `supabase start`
    - `supabase db reset`
-2. In `backend/`, set required env vars (for at least one service):
+2. Configure frontend env:
+   - `cd frontend`
+   - `cp .env.example .env.local`
+   - Set `VITE_SUPABASE_URL` and one key:
+   - `VITE_SUPABASE_PUBLISHABLE_KEY` (recommended)
+   - `VITE_SUPABASE_ANON_KEY` (legacy local/self-hosted fallback)
+   - You can get local values from `supabase status`
+3. Start frontend:
+   - `pnpm install`
+   - `pnpm dev`
+4. Optional backend services:
+   - In `backend/`, set required env vars:
    - `DATABASE_URL` (required by both binaries)
    - `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (required by `ws`)
    - Provider vars for worker, e.g. `CRYPTO_PROVIDER_NAME`, `CRYPTO_PROVIDER_API_KEY`
-3. Run services:
-   - Worker: `go run ./cmd/worker`
-   - WebSocket: `go run ./cmd/ws`
+   - Run worker: `go run ./cmd/worker`
+   - Run WebSocket: `go run ./cmd/ws`
 
 ## Frontend Development
 
@@ -62,11 +83,20 @@ The UI is in `frontend/` and connects directly to Supabase in v1.
    - `pnpm install`
    - `pnpm dev`
 
+Notes:
+- Create a user from the sign-up flow before first sign-in on local Supabase.
+- The UI currently does not consume `backend/cmd/ws`; it uses Supabase Realtime + polling.
+- Current prices populate when the worker writes `prices_current`.
+
 ## Test
 
 From `backend/`:
 
 - `go test ./...`
+
+From `frontend/`:
+
+- `pnpm build`
 
 If your environment blocks default Go cache writes, set:
 
