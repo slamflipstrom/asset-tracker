@@ -1,65 +1,22 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import {
-  createLot,
-  deleteLot,
-  fetchLots,
-  fetchPositions,
-  searchAssets,
-  updateLot
-} from './lib/api';
+import { AppHeader } from './components/AppHeader';
+import { AuthPanel } from './components/AuthPanel';
+import { LotEditorSection } from './components/LotEditorSection';
+import { LotsSection } from './components/LotsSection';
+import { MetricsGrid } from './components/MetricsGrid';
+import { PositionsSection } from './components/PositionsSection';
+import { usePortfolioData } from './hooks/usePortfolioData';
+import { toDateInputValue } from './lib/format';
+import { createLot, deleteLot, updateLot } from './lib/api';
+import { realtimeStatusLabel } from './lib/portfolio';
 import { getSupabase, isSupabaseConfigured } from './lib/supabase';
-import type { Asset, Lot, LotDraft, Position } from './types';
+import type { Lot, LotDraft } from './types';
 
-const REFRESH_MS = (() => {
-  const parsed = Number(import.meta.env.VITE_REFRESH_MS ?? '30000');
-  if (!Number.isFinite(parsed) || parsed < 5000) {
-    return 30000;
-  }
-  return parsed;
-})();
-
-const REALTIME_DEBOUNCE_MS = 500;
-
-type RealtimeStatus = 'off' | 'connecting' | 'live' | 'error';
 type AuthMode = 'signin' | 'signup';
 
-function formatMoney(value: number | null): string {
-  if (value === null) {
-    return '--';
-  }
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2
-  }).format(value);
-}
-
-function formatQuantity(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: 8
-  }).format(value);
-}
-
-function toDateInputValue(isoTimestamp: string): string {
-  const date = new Date(isoTimestamp);
-  if (Number.isNaN(date.getTime())) {
-    return new Date().toISOString().slice(0, 10);
-  }
-  return date.toISOString().slice(0, 10);
-}
-
-function realtimeStatusLabel(status: RealtimeStatus): string {
-  if (status === 'live') {
-    return 'Live updates connected';
-  }
-  if (status === 'connecting') {
-    return 'Connecting live updates...';
-  }
-  if (status === 'error') {
-    return 'Live updates unavailable (polling fallback active)';
-  }
-  return 'Live updates offline';
+function defaultPurchaseDate(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 export function App() {
@@ -73,16 +30,6 @@ export function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
 
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [lots, setLots] = useState<Lot[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [assetQuery, setAssetQuery] = useState('');
-
-  const [dataLoading, setDataLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [dataError, setDataError] = useState<string | null>(null);
-  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>('off');
-
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editingLotID, setEditingLotID] = useState<number | null>(null);
@@ -90,7 +37,24 @@ export function App() {
   const [assetID, setAssetID] = useState<number | ''>('');
   const [quantity, setQuantity] = useState('');
   const [unitCost, setUnitCost] = useState('');
-  const [purchasedAt, setPurchasedAt] = useState(new Date().toISOString().slice(0, 10));
+  const [purchasedAt, setPurchasedAt] = useState(defaultPurchaseDate);
+
+  const {
+    positions,
+    lots,
+    assetQuery,
+    setAssetQuery,
+    dataLoading,
+    syncing,
+    dataError,
+    setDataError,
+    realtimeStatus,
+    refreshPortfolio,
+    refreshIntervalSeconds,
+    assetOptions,
+    portfolioValue,
+    totalPL
+  } = usePortfolioData(session);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -107,9 +71,11 @@ export function App() {
         if (!alive) {
           return;
         }
+
         if (error) {
           setAuthError(error.message);
         }
+
         setSession(data.session);
       })
       .finally(() => {
@@ -130,177 +96,6 @@ export function App() {
     };
   }, []);
 
-  const loadPortfolio = useCallback(
-    async (silent = false) => {
-      if (!session) {
-        return;
-      }
-
-      if (silent) {
-        setSyncing(true);
-      } else {
-        setDataLoading(true);
-      }
-
-      try {
-        const [nextPositions, nextLots] = await Promise.all([fetchPositions(), fetchLots()]);
-        setPositions(nextPositions);
-        setLots(nextLots);
-        setDataError(null);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed loading portfolio data.';
-        setDataError(message);
-      } finally {
-        if (silent) {
-          setSyncing(false);
-        } else {
-          setDataLoading(false);
-        }
-      }
-    },
-    [session]
-  );
-
-  useEffect(() => {
-    if (!session) {
-      setPositions([]);
-      setLots([]);
-      setRealtimeStatus('off');
-      return;
-    }
-
-    const supabase = getSupabase();
-    let active = true;
-    let refreshTimeout: number | undefined;
-
-    const scheduleRefresh = () => {
-      if (!active || refreshTimeout !== undefined) {
-        return;
-      }
-
-      refreshTimeout = window.setTimeout(() => {
-        refreshTimeout = undefined;
-        void loadPortfolio(true);
-      }, REALTIME_DEBOUNCE_MS);
-    };
-
-    setRealtimeStatus('connecting');
-    void loadPortfolio(false);
-
-    const channel = supabase
-      .channel(`portfolio-sync:${session.user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'lots',
-          filter: `user_id=eq.${session.user.id}`
-        },
-        scheduleRefresh
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'prices_current'
-        },
-        scheduleRefresh
-      )
-      .subscribe((status) => {
-        if (!active) {
-          return;
-        }
-
-        if (status === 'SUBSCRIBED') {
-          setRealtimeStatus('live');
-          return;
-        }
-
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          setRealtimeStatus('error');
-        }
-      });
-
-    const intervalID = window.setInterval(() => {
-      void loadPortfolio(true);
-    }, REFRESH_MS);
-
-    return () => {
-      active = false;
-      setRealtimeStatus('off');
-      if (refreshTimeout !== undefined) {
-        window.clearTimeout(refreshTimeout);
-      }
-      window.clearInterval(intervalID);
-      void supabase.removeChannel(channel);
-    };
-  }, [session, loadPortfolio]);
-
-  useEffect(() => {
-    if (!session) {
-      setAssets([]);
-      return;
-    }
-
-    let active = true;
-    const timeoutID = window.setTimeout(() => {
-      void searchAssets(assetQuery)
-        .then((results) => {
-          if (active) {
-            setAssets(results);
-          }
-        })
-        .catch((error) => {
-          if (!active) {
-            return;
-          }
-          const message = error instanceof Error ? error.message : 'Asset search failed.';
-          setDataError(message);
-        });
-    }, 250);
-
-    return () => {
-      active = false;
-      window.clearTimeout(timeoutID);
-    };
-  }, [session, assetQuery]);
-
-  const assetOptions = useMemo(() => {
-    const map = new Map<number, Asset>();
-    for (const asset of assets) {
-      map.set(asset.id, asset);
-    }
-    for (const lot of lots) {
-      if (!map.has(lot.assetId)) {
-        map.set(lot.assetId, {
-          id: lot.assetId,
-          symbol: lot.assetSymbol,
-          name: lot.assetName,
-          type: lot.assetType
-        });
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => a.symbol.localeCompare(b.symbol));
-  }, [assets, lots]);
-
-  const portfolioValue = useMemo(
-    () =>
-      positions.reduce((acc, position) => {
-        if (position.currentPrice === null) {
-          return acc;
-        }
-        return acc + position.totalQty * position.currentPrice;
-      }, 0),
-    [positions]
-  );
-
-  const totalPL = useMemo(
-    () => positions.reduce((acc, position) => acc + (position.unrealizedPL ?? 0), 0),
-    [positions]
-  );
-
   const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAuthBusy(true);
@@ -309,6 +104,7 @@ export function App() {
 
     try {
       const supabase = getSupabase();
+
       if (authMode === 'signin') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
@@ -319,6 +115,7 @@ export function App() {
         if (error) {
           throw error;
         }
+
         setAuthNotice('Account created. If email confirmation is enabled, check your inbox before signing in.');
       }
     } catch (error) {
@@ -334,7 +131,7 @@ export function App() {
     setAssetID('');
     setQuantity('');
     setUnitCost('');
-    setPurchasedAt(new Date().toISOString().slice(0, 10));
+    setPurchasedAt(defaultPurchaseDate());
     setFormError(null);
   };
 
@@ -360,14 +157,17 @@ export function App() {
       setFormError('Select an asset.');
       return;
     }
+
     if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
       setFormError('Quantity must be greater than 0.');
       return;
     }
+
     if (!Number.isFinite(parsedUnitCost) || parsedUnitCost < 0) {
       setFormError('Unit cost must be 0 or greater.');
       return;
     }
+
     if (!purchasedAt) {
       setFormError('Purchase date is required.');
       return;
@@ -395,7 +195,8 @@ export function App() {
       } else {
         await updateLot(editingLotID, draft);
       }
-      await loadPortfolio(false);
+
+      await refreshPortfolio(false);
       resetForm();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save lot.';
@@ -413,7 +214,8 @@ export function App() {
 
     try {
       await deleteLot(lotID);
-      await loadPortfolio(false);
+      await refreshPortfolio(false);
+
       if (editingLotID === lotID) {
         resetForm();
       }
@@ -464,276 +266,74 @@ export function App() {
   if (!session) {
     return (
       <main className="shell">
-        <section className="panel auth-panel">
-          <h1>Asset Tracker</h1>
-          <p>Sign in to manage lots and see your live portfolio snapshot.</p>
-
-          <form onSubmit={handleAuthSubmit} className="stack">
-            <label>
-              Email
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                autoComplete="email"
-                required
-              />
-            </label>
-
-            <label>
-              Password
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
-                required
-                minLength={6}
-              />
-            </label>
-
-            <button type="submit" disabled={authBusy}>
-              {authBusy ? 'Working...' : authMode === 'signin' ? 'Sign In' : 'Create Account'}
-            </button>
-          </form>
-
-          <button
-            type="button"
-            className="button-link"
-            onClick={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
-          >
-            {authMode === 'signin' ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
-          </button>
-
-          {authError && <p className="notice notice--error">{authError}</p>}
-          {authNotice && <p className="notice">{authNotice}</p>}
-        </section>
+        <AuthPanel
+          authMode={authMode}
+          email={email}
+          password={password}
+          authBusy={authBusy}
+          authError={authError}
+          authNotice={authNotice}
+          onSubmit={handleAuthSubmit}
+          onEmailChange={setEmail}
+          onPasswordChange={setPassword}
+          onToggleMode={() => setAuthMode((mode) => (mode === 'signin' ? 'signup' : 'signin'))}
+        />
       </main>
     );
   }
 
   return (
     <main className="shell">
-      <header className="app-header">
-        <div>
-          <h1>Asset Tracker</h1>
-          <p>{session.user.email}</p>
-        </div>
-
-        <div className="header-actions">
-          <button type="button" onClick={() => void loadPortfolio(false)} disabled={dataLoading || syncing}>
-            {syncing ? 'Syncing...' : 'Refresh'}
-          </button>
-          <button type="button" onClick={() => void handleSignOut()} className="button-ghost">
-            Sign Out
-          </button>
-        </div>
-      </header>
+      <AppHeader
+        email={session.user.email}
+        syncing={syncing}
+        dataLoading={dataLoading}
+        onRefresh={() => void refreshPortfolio(false)}
+        onSignOut={() => void handleSignOut()}
+      />
 
       {dataError && <p className="notice notice--error">{dataError}</p>}
 
-      <section className="metrics-grid">
-        <article className="panel metric-card">
-          <h2>Portfolio Value</h2>
-          <p className="metric-value">{formatMoney(portfolioValue)}</p>
-        </article>
+      <MetricsGrid
+        portfolioValue={portfolioValue}
+        totalPL={totalPL}
+        openPositions={positions.length}
+        lotCount={lots.length}
+      />
 
-        <article className="panel metric-card">
-          <h2>Unrealized P/L</h2>
-          <p className={`metric-value ${totalPL >= 0 ? 'positive' : 'negative'}`}>{formatMoney(totalPL)}</p>
-        </article>
+      <PositionsSection
+        positions={positions}
+        dataLoading={dataLoading}
+        realtimeLabel={realtimeStatusLabel(realtimeStatus)}
+        refreshSeconds={refreshIntervalSeconds}
+      />
 
-        <article className="panel metric-card">
-          <h2>Open Positions</h2>
-          <p className="metric-value">{positions.length}</p>
-        </article>
+      <LotEditorSection
+        editingLotID={editingLotID}
+        assetQuery={assetQuery}
+        assetID={assetID}
+        quantity={quantity}
+        unitCost={unitCost}
+        purchasedAt={purchasedAt}
+        assetOptions={assetOptions}
+        formBusy={formBusy}
+        formError={formError}
+        onSubmit={handleSubmitLot}
+        onCancelEdit={resetForm}
+        onAssetQueryChange={setAssetQuery}
+        onAssetIDChange={setAssetID}
+        onQuantityChange={setQuantity}
+        onUnitCostChange={setUnitCost}
+        onPurchasedAtChange={setPurchasedAt}
+      />
 
-        <article className="panel metric-card">
-          <h2>Lots</h2>
-          <p className="metric-value">{lots.length}</p>
-        </article>
-      </section>
-
-      <section className="panel">
-        <div className="section-head">
-          <h2>Positions</h2>
-          <p>
-            {realtimeStatusLabel(realtimeStatus)}. Polling fallback every {Math.round(REFRESH_MS / 1000)}s
-          </p>
-        </div>
-
-        {dataLoading ? (
-          <p>Loading portfolio...</p>
-        ) : positions.length === 0 ? (
-          <p>No positions yet. Add your first lot below.</p>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Asset</th>
-                  <th>Type</th>
-                  <th>Qty</th>
-                  <th>Avg Cost</th>
-                  <th>Price</th>
-                  <th>P/L</th>
-                </tr>
-              </thead>
-              <tbody>
-                {positions.map((position) => (
-                  <tr key={position.assetId}>
-                    <td>
-                      <strong>{position.symbol}</strong>
-                      <span className="subtext">{position.name}</span>
-                    </td>
-                    <td>{position.type}</td>
-                    <td>{formatQuantity(position.totalQty)}</td>
-                    <td>{formatMoney(position.avgCost)}</td>
-                    <td>{formatMoney(position.currentPrice)}</td>
-                    <td
-                      className={
-                        position.unrealizedPL === null ? '' : position.unrealizedPL >= 0 ? 'positive' : 'negative'
-                      }
-                    >
-                      {formatMoney(position.unrealizedPL)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <div className="section-head">
-          <h2>{editingLotID === null ? 'Add Lot' : `Edit Lot #${editingLotID}`}</h2>
-          {editingLotID !== null && (
-            <button type="button" className="button-link" onClick={resetForm}>
-              Cancel edit
-            </button>
-          )}
-        </div>
-
-        <form onSubmit={handleSubmitLot} className="lot-form">
-          <label>
-            Search Assets
-            <input
-              type="text"
-              placeholder="BTC, AAPL, Bitcoin..."
-              value={assetQuery}
-              onChange={(event) => setAssetQuery(event.target.value)}
-            />
-          </label>
-
-          <label>
-            Asset
-            <select
-              value={assetID}
-              onChange={(event) => setAssetID(event.target.value ? Number(event.target.value) : '')}
-              required
-              disabled={editingLotID !== null}
-            >
-              <option value="">Select an asset</option>
-              {assetOptions.map((asset) => (
-                <option key={asset.id} value={asset.id}>
-                  {asset.symbol} - {asset.name} ({asset.type})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Quantity
-            <input
-              type="number"
-              value={quantity}
-              onChange={(event) => setQuantity(event.target.value)}
-              min="0"
-              step="any"
-              required
-            />
-          </label>
-
-          <label>
-            Unit Cost (USD)
-            <input
-              type="number"
-              value={unitCost}
-              onChange={(event) => setUnitCost(event.target.value)}
-              min="0"
-              step="any"
-              required
-            />
-          </label>
-
-          <label>
-            Purchase Date
-            <input
-              type="date"
-              value={purchasedAt}
-              onChange={(event) => setPurchasedAt(event.target.value)}
-              required
-            />
-          </label>
-
-          <button type="submit" disabled={formBusy}>
-            {formBusy ? 'Saving...' : editingLotID === null ? 'Add Lot' : 'Save Changes'}
-          </button>
-        </form>
-
-        {formError && <p className="notice notice--error">{formError}</p>}
-      </section>
-
-      <section className="panel">
-        <h2>Lots</h2>
-        {lots.length === 0 ? (
-          <p>No lots yet.</p>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Asset</th>
-                  <th>Type</th>
-                  <th>Qty</th>
-                  <th>Unit Cost</th>
-                  <th>Purchased</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lots.map((lot) => (
-                  <tr key={lot.id}>
-                    <td>
-                      <strong>{lot.assetSymbol}</strong>
-                      <span className="subtext">{lot.assetName}</span>
-                    </td>
-                    <td>{lot.assetType}</td>
-                    <td>{formatQuantity(lot.quantity)}</td>
-                    <td>{formatMoney(lot.unitCost)}</td>
-                    <td>{toDateInputValue(lot.purchasedAt)}</td>
-                    <td>
-                      <div className="row-actions">
-                        <button type="button" className="button-link" onClick={() => handleEditLot(lot)}>
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="button-link danger"
-                          onClick={() => void handleDeleteLot(lot.id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <LotsSection
+        lots={lots}
+        onEdit={handleEditLot}
+        onDelete={(lotID) => {
+          void handleDeleteLot(lotID);
+        }}
+      />
     </main>
   );
 }
