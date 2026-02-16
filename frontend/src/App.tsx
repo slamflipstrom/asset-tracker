@@ -191,7 +191,7 @@ export function App() {
 
     try {
       if (editingLotID === null) {
-        await createLot(session.user.id, draft);
+        await createLot(draft);
       } else {
         await updateLot(editingLotID, draft);
       }

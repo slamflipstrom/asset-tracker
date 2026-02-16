@@ -35,7 +35,7 @@ Asset Tracker is a portfolio tracker with a Go backend and React frontend:
     - `GET /api/v1/assets/search`
 - `frontend/`
   - React + Vite app with Supabase Auth
-  - Uses `positions_view` and `lots` for portfolio + lot management
+  - Uses `/api/v1` routes from `backend/cmd/ws` for portfolio + lot management
   - Uses Supabase Realtime (`lots`, `prices_current`) with polling fallback
 
 ## Providers
@@ -66,40 +66,42 @@ Prereqs:
    - `VITE_SUPABASE_PUBLISHABLE_KEY` (recommended)
    - `VITE_SUPABASE_ANON_KEY` (legacy local/self-hosted fallback)
    - You can get local values from `supabase status`
-3. Start frontend:
-   - `pnpm install`
-   - `pnpm dev`
-4. Optional backend services:
-   - In `backend/`, set required env vars:
-   - Worker (`go run ./cmd/worker`):
-   - `DATABASE_URL`
-   - `CRYPTO_PROVIDER_NAME`
-   - `CRYPTO_PROVIDER_API_KEY`
-   - optional `CRYPTO_PROVIDER_BASE_URL`
-   - WS server (`go run ./cmd/ws`):
+3. Start WS/API server (required for frontend data operations):
+   - In `backend/`, set:
    - `DATABASE_URL`
    - `SUPABASE_URL`
    - `SUPABASE_SECRET_KEY`
    - optional `PORT` (defaults to `8080`)
-   - Run worker: `go run ./cmd/worker`
-   - Run WebSocket: `go run ./cmd/ws`
+   - Run: `go run ./cmd/ws`
+4. Start frontend:
+   - `pnpm install`
+   - `pnpm dev`
+   - By default, Vite proxies `/api/*` to `http://127.0.0.1:8080`
+5. Optional: start worker for live prices:
+   - In `backend/`, set:
+   - `DATABASE_URL`
+   - `CRYPTO_PROVIDER_NAME`
+   - `CRYPTO_PROVIDER_API_KEY`
+   - optional `CRYPTO_PROVIDER_BASE_URL`
+   - Run: `go run ./cmd/worker`
 
 ## Frontend Development
 
-The UI is in `frontend/` and connects directly to Supabase in v1.
+The UI is in `frontend/`.
 
 1. In `frontend/`, create env vars:
    - `cp .env.example .env.local`
    - Set `VITE_SUPABASE_URL` and:
    - `VITE_SUPABASE_PUBLISHABLE_KEY` (hosted Supabase, recommended), or
    - `VITE_SUPABASE_ANON_KEY` (local/self-hosted fallback)
+   - Optional: `VITE_API_BASE_URL` when API is on another origin
 2. Start UI:
    - `pnpm install`
    - `pnpm dev`
 
 Notes:
 - Create a user from the sign-up flow before first sign-in on local Supabase.
-- The UI currently does not consume `backend/cmd/ws`; it uses Supabase Realtime + polling.
+- Portfolio/lots reads and writes go through `/api/v1` on `backend/cmd/ws`.
 - Current prices populate when the worker writes `prices_current`.
 
 ## Test

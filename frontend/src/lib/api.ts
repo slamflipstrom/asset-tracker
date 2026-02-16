@@ -1,162 +1,197 @@
-import type { Asset, Lot, LotDraft, Position } from '../types';
+import type { Asset, AssetType, Lot, LotDraft, Position } from '../types';
 import { getSupabase } from './supabase';
+
+const API_BASE_URL = (() => {
+  const raw = (import.meta.env.VITE_API_BASE_URL ?? '').trim();
+  return raw.replace(/\/+$/, '');
+})();
+
+interface APIErrorPayload {
+  error?: string;
+}
+
+class APIError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'APIError';
+    this.status = status;
+  }
+}
+
+interface PositionDTO {
+  asset_id: number;
+  symbol: string;
+  name: string;
+  type: string;
+  total_qty: number;
+  avg_cost: number;
+  current_price: number | null;
+  unrealized_pl: number | null;
+}
+
+interface LotDTO {
+  id: number;
+  asset_id: number;
+  symbol: string;
+  name: string;
+  type: string;
+  quantity: number;
+  unit_cost: number;
+  purchased_at: string;
+}
+
+interface AssetDTO {
+  id: number;
+  symbol: string;
+  name: string;
+  type: string;
+}
+
+function normalizeAssetType(value: unknown): AssetType {
+  return value === 'stock' ? 'stock' : 'crypto';
+}
 
 function toNumber(value: unknown): number | null {
   if (value === null || value === undefined) {
     return null;
   }
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-function normalizeType(value: unknown): 'crypto' | 'stock' {
-  return value === 'stock' ? 'stock' : 'crypto';
+async function getAccessToken(): Promise<string> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    throw new Error(`Failed to read auth session: ${error.message}`);
+  }
+
+  const token = data.session?.access_token;
+  if (!token) {
+    throw new Error('Not authenticated. Please sign in again.');
+  }
+
+  return token;
+}
+
+async function parseErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as APIErrorPayload;
+    if (typeof body.error === 'string' && body.error.trim() !== '') {
+      return body.error;
+    }
+  } catch {
+    // Ignore parse errors and fall back to status text.
+  }
+
+  return response.statusText || `Request failed (${response.status})`;
+}
+
+async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = await getAccessToken();
+  const headers = new Headers(init.headers);
+  headers.set('Authorization', `Bearer ${token}`);
+  headers.set('Accept', 'application/json');
+
+  if (init.body !== undefined && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers
+  });
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new APIError(response.status, message);
+  }
+
+  return (await response.json()) as T;
 }
 
 export async function fetchPositions(): Promise<Position[]> {
-  const supabase = getSupabase();
-  const { data: rows, error } = await supabase
-    .from('positions_view')
-    .select('asset_id,total_qty,avg_cost,current_price,unrealized_pl');
+  const rows = await apiRequest<PositionDTO[]>('/api/v1/positions');
 
-  if (error) {
-    throw error;
-  }
-
-  const assetIDs = Array.from(
-    new Set((rows ?? []).map((row) => Number(row.asset_id)).filter((id) => Number.isFinite(id) && id > 0))
-  );
-
-  const assetByID = new Map<number, Asset>();
-  if (assetIDs.length > 0) {
-    const { data: assetRows, error: assetError } = await supabase
-      .from('assets')
-      .select('id,symbol,name,type')
-      .in('id', assetIDs);
-
-    if (assetError) {
-      throw assetError;
-    }
-
-    for (const row of assetRows ?? []) {
-      const id = Number(row.id);
-      if (!Number.isFinite(id)) {
-        continue;
-      }
-      assetByID.set(id, {
-        id,
-        symbol: String(row.symbol ?? 'UNKNOWN'),
-        name: String(row.name ?? 'Unknown asset'),
-        type: normalizeType(row.type)
-      });
-    }
-  }
-
-  const positions: Position[] = (rows ?? []).map((row) => {
-    const assetId = Number(row.asset_id);
-    const asset = assetByID.get(assetId);
-
-    return {
-      assetId,
-      symbol: asset?.symbol ?? `#${assetId}`,
-      name: asset?.name ?? 'Unknown asset',
-      type: asset?.type ?? 'crypto',
+  return rows
+    .map((row) => ({
+      assetId: Number(row.asset_id),
+      symbol: String(row.symbol ?? `#${row.asset_id}`),
+      name: String(row.name ?? 'Unknown asset'),
+      type: normalizeAssetType(row.type),
       totalQty: toNumber(row.total_qty) ?? 0,
       avgCost: toNumber(row.avg_cost) ?? 0,
       currentPrice: toNumber(row.current_price),
       unrealizedPL: toNumber(row.unrealized_pl)
-    };
-  });
-
-  positions.sort((a, b) => a.symbol.localeCompare(b.symbol));
-  return positions;
+    }))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol));
 }
 
 export async function fetchLots(): Promise<Lot[]> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('lots')
-    .select('id,asset_id,quantity,unit_cost,purchased_at,assets(id,symbol,name,type)')
-    .order('purchased_at', { ascending: false });
+  const rows = await apiRequest<LotDTO[]>('/api/v1/lots');
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []).map((row) => {
-    const joined = Array.isArray(row.assets) ? row.assets[0] : row.assets;
-    return {
-      id: Number(row.id),
-      assetId: Number(row.asset_id),
-      assetSymbol: String(joined?.symbol ?? `#${row.asset_id}`),
-      assetName: String(joined?.name ?? 'Unknown asset'),
-      assetType: normalizeType(joined?.type),
-      quantity: toNumber(row.quantity) ?? 0,
-      unitCost: toNumber(row.unit_cost) ?? 0,
-      purchasedAt: String(row.purchased_at)
-    };
-  });
-}
-
-export async function searchAssets(query: string, limit = 20): Promise<Asset[]> {
-  const supabase = getSupabase();
-  const term = query.trim();
-  let request = supabase.from('assets').select('id,symbol,name,type').order('symbol').limit(limit);
-
-  if (term.length > 0) {
-    const safe = term.replace(/[%(),]/g, '');
-    request = request.or(`symbol.ilike.%${safe}%,name.ilike.%${safe}%`);
-  }
-
-  const { data, error } = await request;
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []).map((row) => ({
+  return rows.map((row) => ({
     id: Number(row.id),
-    symbol: String(row.symbol),
-    name: String(row.name),
-    type: normalizeType(row.type)
+    assetId: Number(row.asset_id),
+    assetSymbol: String(row.symbol ?? `#${row.asset_id}`),
+    assetName: String(row.name ?? 'Unknown asset'),
+    assetType: normalizeAssetType(row.type),
+    quantity: toNumber(row.quantity) ?? 0,
+    unitCost: toNumber(row.unit_cost) ?? 0,
+    purchasedAt: String(row.purchased_at)
   }));
 }
 
-export async function createLot(userID: string, draft: LotDraft): Promise<void> {
-  const supabase = getSupabase();
-  const { error } = await supabase.from('lots').insert({
-    user_id: userID,
-    asset_id: draft.assetId,
-    quantity: draft.quantity,
-    unit_cost: draft.unitCost,
-    purchased_at: draft.purchasedAtIso
-  });
-
-  if (error) {
-    throw error;
+export async function searchAssets(query: string, limit = 20): Promise<Asset[]> {
+  const params = new URLSearchParams();
+  const trimmedQuery = query.trim();
+  if (trimmedQuery !== '') {
+    params.set('q', trimmedQuery);
   }
+  params.set('limit', String(limit));
+
+  const rows = await apiRequest<AssetDTO[]>(`/api/v1/assets/search?${params.toString()}`);
+
+  return rows.map((row) => ({
+    id: Number(row.id),
+    symbol: String(row.symbol),
+    name: String(row.name),
+    type: normalizeAssetType(row.type)
+  }));
 }
 
-export async function updateLot(lotID: number, draft: LotDraft): Promise<void> {
-  const supabase = getSupabase();
-  const { error } = await supabase
-    .from('lots')
-    .update({
+export async function createLot(draft: LotDraft): Promise<void> {
+  await apiRequest<{ id: number }>('/api/v1/lots', {
+    method: 'POST',
+    body: JSON.stringify({
+      asset_id: draft.assetId,
       quantity: draft.quantity,
       unit_cost: draft.unitCost,
       purchased_at: draft.purchasedAtIso
     })
-    .eq('id', lotID);
+  });
+}
 
-  if (error) {
-    throw error;
-  }
+export async function updateLot(lotID: number, draft: LotDraft): Promise<void> {
+  await apiRequest<void>(`/api/v1/lots/${lotID}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      quantity: draft.quantity,
+      unit_cost: draft.unitCost,
+      purchased_at: draft.purchasedAtIso
+    })
+  });
 }
 
 export async function deleteLot(lotID: number): Promise<void> {
-  const supabase = getSupabase();
-  const { error } = await supabase.from('lots').delete().eq('id', lotID);
-
-  if (error) {
-    throw error;
-  }
+  await apiRequest<void>(`/api/v1/lots/${lotID}`, {
+    method: 'DELETE'
+  });
 }

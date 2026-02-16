@@ -2,9 +2,9 @@
 
 Basic UI for:
 - Supabase email/password auth
-- Portfolio overview from `positions_view`
-- Lots CRUD (`lots` table)
-- Asset search (`assets` table)
+- Portfolio overview from `GET /api/v1/positions`
+- Lots CRUD via `/api/v1/lots`
+- Asset search via `/api/v1/assets/search`
 
 ## Requirements
 
@@ -24,10 +24,18 @@ cp .env.example .env.local
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY` (hosted Supabase, recommended), or
 - `VITE_SUPABASE_ANON_KEY` (local/self-hosted fallback)
+- Optional: `VITE_API_BASE_URL` if API is served on another origin
 
 For local Supabase, use the values printed by `supabase status`.
 
-3. Install and run:
+3. Start backend WS/API server (repo root):
+
+```bash
+cd backend
+go run ./cmd/ws
+```
+
+4. Install and run frontend:
 
 ```bash
 pnpm install
@@ -44,6 +52,8 @@ pnpm dev
 
 - Uses Supabase Realtime subscriptions on `public.lots` and `public.prices_current` with polling fallback (`VITE_REFRESH_MS`, default 30s).
 - If live updates never connect, enable Realtime for those tables in your Supabase project.
+- In local dev, `/api/*` is proxied to `http://127.0.0.1:8080` by default.
+- Override dev proxy target with `VITE_DEV_API_PROXY_TARGET`.
 - Editing a lot currently updates quantity, unit cost, and purchase date.
 - Asset is locked during edit to avoid accidental asset re-linking.
 
