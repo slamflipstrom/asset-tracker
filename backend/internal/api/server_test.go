@@ -282,6 +282,122 @@ func TestAPICreateLotSuccess(t *testing.T) {
 	}
 }
 
+func TestAPICreateLotStoreError(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{insertLotErr: errors.New("boom")}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	body := []byte(`{"asset_id":1,"quantity":0.25,"unit_cost":38000,"purchased_at":"2026-02-16"}`)
+	router.ServeHTTP(res, newRequest(t, http.MethodPost, "/api/v1/lots", "good", body))
+
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", res.Code)
+	}
+}
+
+func TestAPIListPositionsStoreError(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{positionsErr: errors.New("boom")}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodGet, "/api/v1/positions", "good", nil))
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", res.Code)
+	}
+}
+
+func TestAPIListPositionsAssetLookupError(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{
+		positions:  []db.Position{{AssetID: 10, TotalQty: 1, AvgCost: 100}},
+		listIDsErr: errors.New("boom"),
+	}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodGet, "/api/v1/positions", "good", nil))
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", res.Code)
+	}
+}
+
+func TestAPIListLotsSuccess(t *testing.T) {
+	t.Parallel()
+
+	purchasedAt := time.Date(2026, 2, 16, 12, 0, 0, 0, time.UTC)
+	store := &mockStore{
+		lots: []db.Lot{{
+			ID:          7,
+			UserID:      "user-1",
+			AssetID:     10,
+			Quantity:    1.25,
+			UnitCost:    95,
+			PurchasedAt: purchasedAt,
+		}},
+		assetsByID: map[int64]db.Asset{
+			10: {ID: 10, Symbol: "BTC", Name: "Bitcoin", Type: db.AssetTypeCrypto},
+		},
+	}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodGet, "/api/v1/lots", "good", nil))
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	if store.lotsUID != "user-1" {
+		t.Fatalf("expected user id user-1, got %q", store.lotsUID)
+	}
+
+	var got []lotResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 lot, got %d", len(got))
+	}
+	if got[0].ID != 7 || got[0].Symbol != "BTC" {
+		t.Fatalf("unexpected lot response: %+v", got[0])
+	}
+	if got[0].PurchasedAt != purchasedAt.Format(time.RFC3339) {
+		t.Fatalf("unexpected purchased_at: %q", got[0].PurchasedAt)
+	}
+}
+
+func TestAPIListLotsStoreError(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{lotsErr: errors.New("boom")}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodGet, "/api/v1/lots", "good", nil))
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", res.Code)
+	}
+}
+
+func TestAPIListLotsAssetLookupError(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{
+		lots:       []db.Lot{{ID: 1, AssetID: 10}},
+		listIDsErr: errors.New("boom"),
+	}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodGet, "/api/v1/lots", "good", nil))
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", res.Code)
+	}
+}
+
 func TestAPIUpdateLotNotFound(t *testing.T) {
 	t.Parallel()
 
@@ -294,6 +410,91 @@ func TestAPIUpdateLotNotFound(t *testing.T) {
 
 	if res.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", res.Code)
+	}
+}
+
+func TestAPIUpdateLotSuccess(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{updatedFound: true}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	body := []byte(`{"quantity":0.5,"unit_cost":39000,"purchased_at":"2026-02-16"}`)
+	router.ServeHTTP(res, newRequest(t, http.MethodPatch, "/api/v1/lots/55", "good", body))
+
+	if res.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.Code)
+	}
+	if store.updatedLotID != 55 || store.updatedUserID != "user-1" {
+		t.Fatalf("unexpected update args: lot=%d user=%q", store.updatedLotID, store.updatedUserID)
+	}
+	if store.updatedQuantity != 0.5 || store.updatedUnitCost != 39000 {
+		t.Fatalf("unexpected update fields: quantity=%f unit_cost=%f", store.updatedQuantity, store.updatedUnitCost)
+	}
+	wantPurchasedAt := time.Date(2026, 2, 16, 0, 0, 0, 0, time.UTC)
+	if !store.updatedPurchasedAt.Equal(wantPurchasedAt) {
+		t.Fatalf("unexpected purchased_at: got=%s want=%s", store.updatedPurchasedAt, wantPurchasedAt)
+	}
+}
+
+func TestAPIUpdateLotInvalidID(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{updatedFound: true}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	body := []byte(`{"quantity":0.5,"unit_cost":39000,"purchased_at":"2026-02-16"}`)
+	router.ServeHTTP(res, newRequest(t, http.MethodPatch, "/api/v1/lots/bad", "good", body))
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+}
+
+func TestAPIUpdateLotInvalidBody(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{updatedFound: true}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	body := []byte(`{"quantity":0.5,"unit_cost":39000,"purchased_at":"2026-02-16","extra":1}`)
+	router.ServeHTTP(res, newRequest(t, http.MethodPatch, "/api/v1/lots/55", "good", body))
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+}
+
+func TestAPIUpdateLotInvalidTimestamp(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{updatedFound: true}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	body := []byte(`{"quantity":0.5,"unit_cost":39000,"purchased_at":"not-a-date"}`)
+	router.ServeHTTP(res, newRequest(t, http.MethodPatch, "/api/v1/lots/55", "good", body))
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+}
+
+func TestAPIUpdateLotStoreError(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{updateErr: errors.New("boom")}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	body := []byte(`{"quantity":0.5,"unit_cost":39000,"purchased_at":"2026-02-16"}`)
+	router.ServeHTTP(res, newRequest(t, http.MethodPatch, "/api/v1/lots/55", "good", body))
+
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", res.Code)
 	}
 }
 
@@ -313,6 +514,45 @@ func TestAPIDeleteLotSuccess(t *testing.T) {
 	}
 }
 
+func TestAPIDeleteLotNotFound(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{deletedFound: false}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodDelete, "/api/v1/lots/55", "good", nil))
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.Code)
+	}
+}
+
+func TestAPIDeleteLotInvalidID(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{deletedFound: true}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodDelete, "/api/v1/lots/bad", "good", nil))
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+}
+
+func TestAPIDeleteLotStoreError(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{deleteErr: errors.New("boom")}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodDelete, "/api/v1/lots/55", "good", nil))
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", res.Code)
+	}
+}
+
 func TestAPISearchAssetsValidation(t *testing.T) {
 	t.Parallel()
 
@@ -322,6 +562,49 @@ func TestAPISearchAssetsValidation(t *testing.T) {
 	router.ServeHTTP(res, newRequest(t, http.MethodGet, "/api/v1/assets/search?type=bad", "good", nil))
 	if res.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", res.Code)
+	}
+}
+
+func TestAPISearchAssetsLimitValidation(t *testing.T) {
+	t.Parallel()
+
+	router := newAPIRouter(&mockStore{}, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodGet, "/api/v1/assets/search?limit=bad", "good", nil))
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.Code)
+	}
+}
+
+func TestAPISearchAssetsLimitClampsToMax(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{
+		searchAssets: []db.Asset{{ID: 1, Symbol: "BTC", Name: "Bitcoin", Type: db.AssetTypeCrypto}},
+	}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodGet, "/api/v1/assets/search?q=bt&limit=500", "good", nil))
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	if store.searchLimit != 100 {
+		t.Fatalf("expected limit to be clamped to 100, got %d", store.searchLimit)
+	}
+}
+
+func TestAPISearchAssetsStoreError(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{searchErr: errors.New("boom")}
+	router := newAPIRouter(store, mockVerifier{claims: auth.Claims{Subject: "user-1"}})
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, newRequest(t, http.MethodGet, "/api/v1/assets/search?q=bt", "good", nil))
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", res.Code)
 	}
 }
 

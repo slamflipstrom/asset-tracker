@@ -126,6 +126,37 @@ func TestCostBasisAndPLViews(t *testing.T) {
 	if lot3.UnrealizedPL.Valid {
 		t.Fatalf("expected lot3 unrealized_pl null, got %f", lot3.UnrealizedPL.Float64)
 	}
+
+	filterAssetID := pricedAssetID
+	filteredLots, err := database.FetchLotPerformance(ctx, primaryUserID, &filterAssetID)
+	if err != nil {
+		t.Fatalf("FetchLotPerformance with filter failed: %v", err)
+	}
+	if len(filteredLots) != 2 {
+		t.Fatalf("expected 2 filtered lot rows, got %d", len(filteredLots))
+	}
+	for _, lot := range filteredLots {
+		if lot.AssetID != pricedAssetID {
+			t.Fatalf("expected filtered lot asset %d, got %d", pricedAssetID, lot.AssetID)
+		}
+	}
+
+	emptyUserID := randomUUID(t)
+	emptyPositions, err := database.FetchPositionsForUser(ctx, emptyUserID)
+	if err != nil {
+		t.Fatalf("FetchPositionsForUser for empty user failed: %v", err)
+	}
+	if len(emptyPositions) != 0 {
+		t.Fatalf("expected 0 positions for empty user, got %d", len(emptyPositions))
+	}
+
+	emptyLots, err := database.FetchLotPerformance(ctx, emptyUserID, nil)
+	if err != nil {
+		t.Fatalf("FetchLotPerformance for empty user failed: %v", err)
+	}
+	if len(emptyLots) != 0 {
+		t.Fatalf("expected 0 lots for empty user, got %d", len(emptyLots))
+	}
 }
 
 func mustOpenIntegrationDB(t *testing.T) *DB {
