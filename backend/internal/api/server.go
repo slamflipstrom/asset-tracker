@@ -18,16 +18,26 @@ import (
 )
 
 type Server struct {
-	DB       *db.DB
+	DB       Store
 	Verifier auth.Verifier
+}
+
+type Store interface {
+	FetchPositionsForUser(ctx context.Context, userID string) ([]db.Position, error)
+	ListLotsByUser(ctx context.Context, userID string) ([]db.Lot, error)
+	InsertLot(ctx context.Context, lot db.Lot) (int64, error)
+	UpdateLotForUser(ctx context.Context, userID string, lotID int64, quantity float64, unitCost float64, purchasedAt time.Time) (bool, error)
+	DeleteLotForUser(ctx context.Context, userID string, lotID int64) (bool, error)
+	SearchAssets(ctx context.Context, query string, assetType string, limit int) ([]db.Asset, error)
+	ListAssetsByIDs(ctx context.Context, ids []int64) ([]db.Asset, error)
 }
 
 type contextKey string
 
 const userIDContextKey contextKey = "userID"
 
-func NewServer(database *db.DB, verifier auth.Verifier) *Server {
-	return &Server{DB: database, Verifier: verifier}
+func NewServer(store Store, verifier auth.Verifier) *Server {
+	return &Server{DB: store, Verifier: verifier}
 }
 
 func (s *Server) Mount(r chi.Router) {
