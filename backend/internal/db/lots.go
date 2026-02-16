@@ -1,6 +1,9 @@
 package db
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 func (d *DB) ListLotsByUser(ctx context.Context, userID string) ([]Lot, error) {
 	rows, err := d.pool.Query(ctx, `
@@ -71,10 +74,33 @@ func (d *DB) UpdateLot(ctx context.Context, lot Lot) error {
 	return err
 }
 
+func (d *DB) UpdateLotForUser(ctx context.Context, userID string, lotID int64, quantity float64, unitCost float64, purchasedAt time.Time) (bool, error) {
+	tag, err := d.pool.Exec(ctx, `
+		update public.lots
+		set quantity = $1, unit_cost = $2, purchased_at = $3
+		where id = $4 and user_id = $5
+	`, quantity, unitCost, purchasedAt, lotID, userID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
 func (d *DB) DeleteLot(ctx context.Context, userID string, lotID int64) error {
 	_, err := d.pool.Exec(ctx, `
 		delete from public.lots
 		where id = $1 and user_id = $2
 	`, lotID, userID)
 	return err
+}
+
+func (d *DB) DeleteLotForUser(ctx context.Context, userID string, lotID int64) (bool, error) {
+	tag, err := d.pool.Exec(ctx, `
+		delete from public.lots
+		where id = $1 and user_id = $2
+	`, lotID, userID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
 }

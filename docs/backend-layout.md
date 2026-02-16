@@ -12,6 +12,7 @@
 - `backend/cmd/ws/main.go`
 - `backend/internal/config/`
 - `backend/internal/db/`
+- `backend/internal/api/`
 - `backend/internal/providers/`
 - `backend/internal/prices/`
 - `backend/internal/auth/`
@@ -24,6 +25,9 @@
 - `internal/db`
   - Query and upsert data in Supabase Postgres.
   - Shared SQL helpers for assets, lots, prices, settings.
+- `internal/api`
+  - Versioned REST handlers (`/api/v1`) for frontend-facing read/write operations.
+  - Request validation and auth context mapping.
 - `internal/providers`
   - `StockProvider` and `CryptoProvider` interfaces.
   - Provider implementations and batching logic.

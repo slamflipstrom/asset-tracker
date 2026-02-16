@@ -9,8 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"asset-tracker/internal/api"
 	"asset-tracker/internal/auth"
 	"asset-tracker/internal/config"
+	"asset-tracker/internal/db"
 	"asset-tracker/internal/ws"
 	"github.com/go-chi/chi/v5"
 )
@@ -22,15 +24,23 @@ func main() {
 	}
 
 	router := chi.NewRouter()
+	database, err := db.New(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("db init error: %v", err)
+	}
+	defer database.Close()
+
 	hub := ws.NewHub()
 	verifier := auth.NewSupabaseVerifier(cfg.SupabaseURL, cfg.SupabaseSecretKey)
 	server := ws.NewServer(hub, verifier)
+	apiServer := api.NewServer(database, verifier)
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
 	router.Get("/ws", server.Handler())
+	apiServer.Mount(router)
 
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,

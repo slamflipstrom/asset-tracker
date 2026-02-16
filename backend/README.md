@@ -3,7 +3,20 @@
 This folder contains two services:
 
 - `cmd/worker`: price polling worker
-- `cmd/ws`: WebSocket server
+- `cmd/ws`: WebSocket + REST API server
+
+## WS/API routes
+
+- `GET /health`
+- `GET /ws`
+- `GET /api/v1/positions`
+- `GET /api/v1/lots`
+- `POST /api/v1/lots`
+- `PATCH /api/v1/lots/{lotID}`
+- `DELETE /api/v1/lots/{lotID}`
+- `GET /api/v1/assets/search`
+
+Route contracts: `/Users/samlindstrom/Code/asset-tracker/docs/api-v1.md`
 
 ## Quick Start
 1. Ensure env vars are set (see `internal/config`), per service:

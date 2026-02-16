@@ -2,6 +2,33 @@ package db
 
 import "context"
 
+func (d *DB) ListAssetsByIDs(ctx context.Context, ids []int64) ([]Asset, error) {
+	if len(ids) == 0 {
+		return []Asset{}, nil
+	}
+
+	rows, err := d.pool.Query(ctx, `
+		select id, symbol, coalesce(market_data_id, ''), coalesce(lookup_blockchain, ''), coalesce(lookup_address, ''), type, name
+		from public.assets
+		where id = any($1::bigint[])
+		order by symbol
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var assets []Asset
+	for rows.Next() {
+		var asset Asset
+		if err := rows.Scan(&asset.ID, &asset.Symbol, &asset.MarketDataID, &asset.LookupBlockchain, &asset.LookupAddress, &asset.Type, &asset.Name); err != nil {
+			return nil, err
+		}
+		assets = append(assets, asset)
+	}
+	return assets, rows.Err()
+}
+
 func (d *DB) FetchTrackedAssets(ctx context.Context) ([]TrackedAsset, error) {
 	rows, err := d.pool.Query(ctx, `
 		select a.id, a.symbol, coalesce(a.market_data_id, ''), coalesce(a.lookup_blockchain, ''), coalesce(a.lookup_address, ''), a.type, min(us.refresh_interval_sec) as min_refresh_interval_sec

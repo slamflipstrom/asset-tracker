@@ -23,9 +23,16 @@ Asset Tracker is a portfolio tracker with a Go backend and React frontend:
   - Fetches quotes from configured providers
   - Writes to `prices_current` and `price_snapshots`
 - `backend/cmd/ws`
-  - Exposes `GET /health` and `GET /ws`
+  - Exposes `GET /health`, `GET /ws`, and versioned REST routes under `/api/v1`
   - Verifies Supabase bearer tokens via `/auth/v1/user`
   - Supports subscribe/unsubscribe messages for `portfolio` and `asset` scopes
+  - API routes:
+    - `GET /api/v1/positions`
+    - `GET /api/v1/lots`
+    - `POST /api/v1/lots`
+    - `PATCH /api/v1/lots/{lotID}`
+    - `DELETE /api/v1/lots/{lotID}`
+    - `GET /api/v1/assets/search`
 - `frontend/`
   - React + Vite app with Supabase Auth
   - Uses `positions_view` and `lots` for portfolio + lot management
@@ -116,5 +123,7 @@ If your environment blocks default Go cache writes, set:
   - `fly.worker.toml`
 - Deployment guide:
   - `docs/fly-deploy.md`
+- API contract:
+  - `docs/api-v1.md`
 - Planning:
   - `docs/v1-checkpoint-plan.md`
