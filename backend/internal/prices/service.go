@@ -12,7 +12,7 @@ import (
 )
 
 type Service struct {
-	db     *db.DB
+	store  Store
 	stock  providers.StockProvider
 	crypto providers.CryptoProvider
 	state  map[int64]*assetState
@@ -28,9 +28,16 @@ type dueAsset struct {
 	interval time.Duration
 }
 
-func NewService(database *db.DB, stock providers.StockProvider, crypto providers.CryptoProvider) *Service {
+type Store interface {
+	FetchAppSettings(ctx context.Context) (db.AppSettings, error)
+	FetchTrackedAssets(ctx context.Context) ([]db.TrackedAsset, error)
+	UpsertCurrentPrices(ctx context.Context, updates []db.PriceUpdate) error
+	InsertPriceSnapshots(ctx context.Context, updates []db.PriceUpdate) error
+}
+
+func NewService(store Store, stock providers.StockProvider, crypto providers.CryptoProvider) *Service {
 	return &Service{
-		db:     database,
+		store:  store,
 		stock:  stock,
 		crypto: crypto,
 		state:  make(map[int64]*assetState),
@@ -58,13 +65,13 @@ func (s *Service) Refresh(ctx context.Context) error {
 
 	now := time.Now().UTC()
 
-	settings, err := s.db.FetchAppSettings(ctx)
+	settings, err := s.store.FetchAppSettings(ctx)
 	if err != nil {
 		refreshErr = err
 		return err
 	}
 
-	tracked, err := s.db.FetchTrackedAssets(ctx)
+	tracked, err := s.store.FetchTrackedAssets(ctx)
 	if err != nil {
 		refreshErr = err
 		return err
@@ -121,10 +128,10 @@ func (s *Service) Refresh(ctx context.Context) error {
 		return refreshErr
 	}
 
-	if err := s.db.UpsertCurrentPrices(ctx, updates); err != nil {
+	if err := s.store.UpsertCurrentPrices(ctx, updates); err != nil {
 		errs = append(errs, err)
 	}
-	if err := s.db.InsertPriceSnapshots(ctx, updates); err != nil {
+	if err := s.store.InsertPriceSnapshots(ctx, updates); err != nil {
 		errs = append(errs, err)
 	}
 
