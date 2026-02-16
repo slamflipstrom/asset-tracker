@@ -49,3 +49,10 @@ Route contracts: `/Users/samlindstrom/Code/asset-tracker/docs/api-v1.md`
 - WebSocket app config: `/Users/samlindstrom/Code/asset-tracker/fly.ws.toml`
 - Worker app config: `/Users/samlindstrom/Code/asset-tracker/fly.worker.toml`
 - Deployment runbook: `/Users/samlindstrom/Code/asset-tracker/docs/fly-deploy.md`
+
+## Tests
+
+- `go test ./...`
+- DB math integration test (`TestCostBasisAndPLViews`) runs when a test DB is reachable.
+- Optional override for DB URL:
+  - `ASSET_TRACKER_TEST_DATABASE_URL=postgresql://... go test ./internal/db -run TestCostBasisAndPLViews -v`

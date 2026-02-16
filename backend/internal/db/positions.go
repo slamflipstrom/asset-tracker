@@ -29,7 +29,7 @@ func (d *DB) FetchLotPerformance(ctx context.Context, userID string, assetID *in
 		select lot_id, user_id, asset_id, quantity, unit_cost, purchased_at, current_price, unrealized_pl
 		from public.lot_performance_view
 		where user_id = $1
-		and ($2 is null or asset_id = $2)
+		and ($2::bigint is null or asset_id = $2::bigint)
 		order by purchased_at desc
 	`, userID, assetID)
 	if err != nil {
