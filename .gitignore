@@ -30,3 +30,7 @@ supabase/.temp/
 # Node
 node_modules/
 dist/
+playwright-report/
+test-results/
+frontend/playwright-report/
+frontend/test-results/

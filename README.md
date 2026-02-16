@@ -115,6 +115,7 @@ From `backend/`:
 From `frontend/`:
 
 - `pnpm build`
+- `pnpm test:e2e:smoke` (Playwright smoke flow with mocked auth/API routes)
 
 If your environment blocks default Go cache writes, set:
 

@@ -47,6 +47,8 @@ pnpm dev
 - `pnpm dev`: Start local dev server
 - `pnpm build`: Type-check and build production assets
 - `pnpm preview`: Preview the production build locally
+- `pnpm test:e2e:smoke`: Run Playwright smoke E2E (sign-in + lot CRUD + refresh rendering)
+- `pnpm test:e2e:smoke:headed`: Same smoke suite in headed browser mode
 
 ## Notes
 
@@ -65,3 +67,5 @@ pnpm dev
   - The user usually does not exist in the local project yet. Use the sign-up flow first, then sign in.
 - Prices are empty:
   - `positions_view` can return `null` `current_price` until `prices_current` is populated by the worker.
+- Playwright says Chromium is missing:
+  - Run `pnpm exec playwright install chromium`.
