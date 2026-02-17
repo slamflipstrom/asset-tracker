@@ -111,6 +111,8 @@ From `backend/`:
 - `go test ./...`
 - Optional DB math integration test target:
   - `ASSET_TRACKER_TEST_DATABASE_URL=postgresql://... go test ./internal/db -run TestCostBasisAndPLViews -v`
+- Optional API E2E integration test target:
+  - `ASSET_TRACKER_TEST_DATABASE_URL=postgresql://... go test ./internal/api -run TestAPIE2EHappyPath -v`
 
 From `frontend/`:
 

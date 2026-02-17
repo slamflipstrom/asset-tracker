@@ -86,3 +86,66 @@ jobs:
             echo "DB integration test skipped; failing gate."
             exit 1
           fi
+
+  backend-api-e2e:
+    name: Backend API E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ASSET_TRACKER_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
+      - name: Bootstrap auth.users for integration tests
+        run: |
+          psql "$ASSET_TRACKER_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          create schema if not exists auth;
+
+          create table if not exists auth.users (
+            id uuid primary key,
+            email text,
+            aud text,
+            role text,
+            encrypted_password text,
+            created_at timestamptz,
+            updated_at timestamptz,
+            is_sso_user boolean,
+            is_anonymous boolean
+          );
+          SQL
+
+      - name: Apply Supabase schema
+        run: psql "$ASSET_TRACKER_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/schema.sql
+
+      - name: Run API E2E integration gate
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          go test ./internal/api -run TestAPIE2EHappyPath -count=1 -v | tee /tmp/api-e2e.log
+          if grep -q "skipping API E2E integration test" /tmp/api-e2e.log; then
+            echo "API E2E integration test skipped; failing gate."
+            exit 1
+          fi

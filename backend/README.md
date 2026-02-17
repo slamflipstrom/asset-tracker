@@ -54,5 +54,7 @@ Route contracts: `/Users/samlindstrom/Code/asset-tracker/docs/api-v1.md`
 
 - `go test ./...`
 - DB math integration test (`TestCostBasisAndPLViews`) runs when a test DB is reachable.
+- API E2E integration test (`TestAPIE2EHappyPath`) runs when a test DB is reachable.
 - Optional override for DB URL:
   - `ASSET_TRACKER_TEST_DATABASE_URL=postgresql://... go test ./internal/db -run TestCostBasisAndPLViews -v`
+  - `ASSET_TRACKER_TEST_DATABASE_URL=postgresql://... go test ./internal/api -run TestAPIE2EHappyPath -v`
