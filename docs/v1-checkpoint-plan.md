@@ -3,6 +3,19 @@
 **Checkpoint date:** February 15, 2026
 **Assessment target:** Frontend + backend architecture readiness for v1 rollout
 
+## 0. Progress Update (February 18, 2026)
+
+Gate B progress snapshot:
+
+1. Frontend reads/writes through Go API boundary: `PASS`
+2. Server-side auth and validation for business actions: `PASS`
+3. Realtime strategy finalized for v1: `PASS` (see `docs/realtime-v1-decision.md`)
+4. Frontend smoke coverage (auth + lot CRUD + refresh): `PASS`
+5. CI runs backend tests and frontend build on PRs: `PASS`
+6. Operational baseline (error tracking, metrics, runbook): `FAIL`
+
+Current production-readiness blocker: item 6 only (observability and incident operations).
+
 ## 1. Checkpoint Decision
 
 - **Current decision:** `GO` for internal alpha/dogfooding.
@@ -10,7 +23,7 @@
 
 Rationale:
 - Core user flow exists (auth, lots CRUD, portfolio view, live updates via Supabase Realtime + polling fallback).
-- Critical production guardrails are still missing (backend API boundary, formal frontend test coverage, WS event fanout path, and observability).
+- Remaining critical production guardrails are primarily operational (error tracking, metrics, and runbook maturity).
 
 ## 2. V1 Scope Definition
 
@@ -48,7 +61,7 @@ Out-of-scope for v1:
 5. CI checks run backend tests and frontend build on every PR.
 6. Operational baseline exists (error tracking, request/latency metrics, connection metrics, runbooks).
 
-**Status as of February 15, 2026:** `FAIL` (blocked by items 1-6)
+**Status as of February 18, 2026:** `FAIL` (blocked by item 6)
 
 ## 4. Ordered Backlog
 

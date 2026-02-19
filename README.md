@@ -132,5 +132,7 @@ If your environment blocks default Go cache writes, set:
   - `docs/fly-deploy.md`
 - API contract:
   - `docs/api-v1.md`
+- Realtime decision:
+  - `docs/realtime-v1-decision.md`
 - Planning:
   - `docs/v1-checkpoint-plan.md`

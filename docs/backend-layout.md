@@ -5,6 +5,7 @@
 - Go worker polls separate stock and crypto providers on a fixed interval per asset.
 - Go WebSocket server pushes price and position updates to connected clients.
 - Supabase Auth + Postgres remains the source of truth.
+- V1 realtime path uses Supabase Realtime + polling fallback; WS fanout is a deferred scale path.
 
 ## Suggested Repo Layout
 
@@ -46,12 +47,14 @@
   - Effective interval = min(user intervals, max) and not lower than min.
 - Poll providers per asset batch and update `prices_current` and `price_snapshots`.
 
-## WebSocket Flow
+## WebSocket Flow (Deferred Primary Path for V1)
 
 - Client connects with `Authorization: Bearer <supabase_jwt>`.
 - Server verifies token via Supabase JWKS.
 - Client subscribes to `portfolio` or `asset` scope.
 - Server pushes `price_update`, `position_update`, `lot_update` events.
+
+For v1 rollout, frontend freshness does not depend on this flow. See `docs/realtime-v1-decision.md`.
 
 ## Required Env Vars
 
