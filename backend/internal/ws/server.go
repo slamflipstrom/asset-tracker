@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"asset-tracker/internal/auth"
+	"asset-tracker/internal/telemetry"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
@@ -57,12 +58,14 @@ func (s *Server) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := extractToken(r)
 		if token == "" {
+			telemetry.WSAuthFailure()
 			http.Error(w, "missing auth token", http.StatusUnauthorized)
 			return
 		}
 
 		claims, err := s.Verifier.Verify(r.Context(), token)
 		if err != nil {
+			telemetry.WSAuthFailure()
 			http.Error(w, "invalid auth token", http.StatusUnauthorized)
 			return
 		}
@@ -81,6 +84,7 @@ func (s *Server) Handler() http.HandlerFunc {
 
 		sessionID := claims.Subject + ":" + strconv.FormatInt(time.Now().UnixNano(), 10)
 		if err := s.Hub.Add(sessionID, claims.Subject); err != nil {
+			telemetry.WSSessionInitFailure()
 			_ = wsjson.Write(ctx, conn, serverMessage{
 				Type:    string(messageTypeError),
 				Message: "failed to initialize websocket session",
@@ -88,7 +92,9 @@ func (s *Server) Handler() http.HandlerFunc {
 			_ = conn.Close(websocket.StatusInternalError, "failed to initialize session")
 			return
 		}
+		telemetry.WSConnectionOpened()
 		defer s.Hub.Remove(sessionID)
+		defer telemetry.WSConnectionClosed()
 
 		if err := wsjson.Write(ctx, conn, serverMessage{
 			Type:   string(messageTypeReady),

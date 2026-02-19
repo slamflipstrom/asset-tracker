@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,9 +15,12 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
 	cfg, err := config.LoadForWorker()
 	if err != nil {
-		log.Fatalf("config error: %v", err)
+		slog.Error("failed to load worker config", "error", err)
+		os.Exit(1)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -25,7 +28,8 @@ func main() {
 
 	database, err := db.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("db error: %v", err)
+		slog.Error("failed to initialize database", "error", err)
+		os.Exit(1)
 	}
 	defer database.Close()
 
@@ -34,12 +38,15 @@ func main() {
 
 	scheduler := prices.NewScheduler(30*time.Second, func(ctx context.Context) error {
 		if err := service.Refresh(ctx); err != nil {
-			log.Printf("refresh error: %v", err)
+			slog.Error("worker refresh cycle failed", "error", err)
 		}
 		return nil
 	})
 
+	slog.Info("worker started", "interval_seconds", 30)
 	if err := scheduler.Run(ctx); err != nil && err != context.Canceled {
-		log.Fatalf("worker stopped: %v", err)
+		slog.Error("worker stopped unexpectedly", "error", err)
+		os.Exit(1)
 	}
+	slog.Info("worker stopped")
 }

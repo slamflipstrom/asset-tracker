@@ -23,7 +23,7 @@ Asset Tracker is a portfolio tracker with a Go backend and React frontend:
   - Fetches quotes from configured providers
   - Writes to `prices_current` and `price_snapshots`
 - `backend/cmd/ws`
-  - Exposes `GET /health`, `GET /ws`, and versioned REST routes under `/api/v1`
+  - Exposes `GET /health`, `GET /debug/vars`, `GET /ws`, and versioned REST routes under `/api/v1`
   - Verifies Supabase bearer tokens via `/auth/v1/user`
   - Supports subscribe/unsubscribe messages for `portfolio` and `asset` scopes
   - API routes:
@@ -134,5 +134,7 @@ If your environment blocks default Go cache writes, set:
   - `docs/api-v1.md`
 - Realtime decision:
   - `docs/realtime-v1-decision.md`
+- Ops runbook:
+  - `docs/ops-runbook.md`
 - Planning:
   - `docs/v1-checkpoint-plan.md`

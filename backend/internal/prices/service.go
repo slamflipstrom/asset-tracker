@@ -3,7 +3,7 @@ package prices
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -52,14 +52,26 @@ func (s *Service) Refresh(ctx context.Context) error {
 	updateCount := 0
 	var refreshErr error
 	defer func() {
-		log.Printf(
-			"refresh cycle: tracked=%d due=%d quotes=%d updates_written=%d duration=%s err=%v",
-			trackedCount,
-			dueCount,
-			quoteCount,
-			updateCount,
-			time.Since(start).Round(time.Millisecond),
-			refreshErr,
+		duration := time.Since(start).Round(time.Millisecond)
+		if refreshErr != nil {
+			slog.Error(
+				"refresh cycle completed with errors",
+				"tracked", trackedCount,
+				"due", dueCount,
+				"quotes", quoteCount,
+				"updates_written", updateCount,
+				"duration", duration.String(),
+				"error", refreshErr,
+			)
+			return
+		}
+		slog.Info(
+			"refresh cycle completed",
+			"tracked", trackedCount,
+			"due", dueCount,
+			"quotes", quoteCount,
+			"updates_written", updateCount,
+			"duration", duration.String(),
 		)
 	}()
 

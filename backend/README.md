@@ -8,6 +8,7 @@ This folder contains two services:
 ## WS/API routes
 
 - `GET /health`
+- `GET /debug/vars`
 - `GET /ws`
 - `GET /api/v1/positions`
 - `GET /api/v1/lots`
@@ -17,6 +18,8 @@ This folder contains two services:
 - `GET /api/v1/assets/search`
 
 Route contracts: `/Users/samlindstrom/Code/asset-tracker/docs/api-v1.md`
+
+Observability runbook: `/Users/samlindstrom/Code/asset-tracker/docs/ops-runbook.md`
 
 ## Quick Start
 1. Ensure env vars are set (see `internal/config`), per service:

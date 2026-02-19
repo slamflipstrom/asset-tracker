@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
+	"expvar"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,15 +19,19 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
 	cfg, err := config.LoadForWS()
 	if err != nil {
-		log.Fatalf("config error: %v", err)
+		slog.Error("failed to load ws config", "error", err)
+		os.Exit(1)
 	}
 
 	router := chi.NewRouter()
 	database, err := db.New(context.Background(), cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("db init error: %v", err)
+		slog.Error("failed to initialize database", "error", err)
+		os.Exit(1)
 	}
 	defer database.Close()
 
@@ -39,6 +44,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+	router.Handle("/debug/vars", expvar.Handler())
 	router.Get("/ws", server.Handler())
 	apiServer.Mount(router)
 
@@ -51,14 +57,28 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	serverErrCh := make(chan error, 1)
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+			serverErrCh <- err
 		}
 	}()
 
-	<-ctx.Done()
+	slog.Info("ws/api server started", "port", cfg.Port)
+
+	select {
+	case <-ctx.Done():
+		slog.Info("shutdown signal received")
+	case err := <-serverErrCh:
+		slog.Error("ws/api server terminated unexpectedly", "error", err)
+		os.Exit(1)
+	}
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = httpServer.Shutdown(shutdownCtx)
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		slog.Error("graceful shutdown failed", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("ws/api server stopped")
 }

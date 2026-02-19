@@ -14,6 +14,7 @@ import (
 
 	"asset-tracker/internal/auth"
 	"asset-tracker/internal/db"
+	"asset-tracker/internal/telemetry"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -42,6 +43,7 @@ func NewServer(store Store, verifier auth.Verifier) *Server {
 
 func (s *Server) Mount(r chi.Router) {
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(telemetry.APIRequestMetricsMiddleware)
 		r.Use(s.authMiddleware)
 		r.Get("/positions", s.handleListPositions)
 		r.Get("/lots", s.handleListLots)

@@ -3,7 +3,7 @@
 **Checkpoint date:** February 15, 2026
 **Assessment target:** Frontend + backend architecture readiness for v1 rollout
 
-## 0. Progress Update (February 18, 2026)
+## 0. Progress Update (February 19, 2026)
 
 Gate B progress snapshot:
 
@@ -12,9 +12,9 @@ Gate B progress snapshot:
 3. Realtime strategy finalized for v1: `PASS` (see `docs/realtime-v1-decision.md`)
 4. Frontend smoke coverage (auth + lot CRUD + refresh): `PASS`
 5. CI runs backend tests and frontend build on PRs: `PASS`
-6. Operational baseline (error tracking, metrics, runbook): `FAIL`
+6. Operational baseline (error tracking, metrics, runbook): `IN PROGRESS`
 
-Current production-readiness blocker: item 6 only (observability and incident operations).
+Current production-readiness blocker: finish operational baseline (dashboard + alerting from the new metrics/logging signals).
 
 ## 1. Checkpoint Decision
 
@@ -61,7 +61,7 @@ Out-of-scope for v1:
 5. CI checks run backend tests and frontend build on every PR.
 6. Operational baseline exists (error tracking, request/latency metrics, connection metrics, runbooks).
 
-**Status as of February 18, 2026:** `FAIL` (blocked by item 6)
+**Status as of February 19, 2026:** `FAIL` (blocked by item 6 completion)
 
 ## 4. Ordered Backlog
 
