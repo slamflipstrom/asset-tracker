@@ -19,8 +19,8 @@ Dashboard and alert definitions: `docs/ops-dashboard-alerts-v1.md` (lean baselin
    - `GET /debug/vars` on `asset-ws`.
 3. Confirm worker logs are advancing:
    - Recent `refresh cycle completed` log entries should be present.
-4. Verify required telemetry keys exist:
-   - `backend/scripts/ops/verify-debug-vars.sh https://<asset-ws-host>/debug/vars`
+4. Run the lean verification command:
+   - `backend/scripts/ops/verify-lean-baseline.sh https://<asset-ws-host> 60`
 
 ## Metrics (from `/debug/vars`)
 
@@ -41,6 +41,10 @@ Optional advanced metrics (when needed):
 - `ws_connections_total`
 - `ws_auth_failures_total`
 - `ws_session_init_failures_total`
+
+Optional key-only check:
+
+- `backend/scripts/ops/verify-debug-vars.sh https://<asset-ws-host>/debug/vars`
 
 ## Common Incidents
 

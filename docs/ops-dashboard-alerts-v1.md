@@ -67,5 +67,5 @@ Optional warning alert:
 1. One dashboard exists with the four lean panels.
 2. Three lean alerts are configured.
 3. Alerts deliver to your primary notification channel.
-4. Metrics keys are verified in staging and production with:
-   - `backend/scripts/ops/verify-debug-vars.sh https://<asset-ws-host>/debug/vars`
+4. Lean baseline check passes in staging and production with:
+   - `backend/scripts/ops/verify-lean-baseline.sh https://<asset-ws-host> 60`

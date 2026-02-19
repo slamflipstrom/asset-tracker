@@ -140,5 +140,7 @@ If your environment blocks default Go cache writes, set:
   - `docs/ops-dashboard-alerts-v1.md`
 - Telemetry verification script:
   - `backend/scripts/ops/verify-debug-vars.sh`
+- Lean baseline verification script:
+  - `backend/scripts/ops/verify-lean-baseline.sh`
 - Planning:
   - `docs/v1-checkpoint-plan.md`

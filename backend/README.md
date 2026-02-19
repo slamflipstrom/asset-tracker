@@ -22,6 +22,7 @@ Route contracts: `/Users/samlindstrom/Code/asset-tracker/docs/api-v1.md`
 Observability runbook: `/Users/samlindstrom/Code/asset-tracker/docs/ops-runbook.md`
 Observability dashboard/alerts spec: `/Users/samlindstrom/Code/asset-tracker/docs/ops-dashboard-alerts-v1.md`
 Telemetry verification script: `/Users/samlindstrom/Code/asset-tracker/backend/scripts/ops/verify-debug-vars.sh`
+Lean baseline verification script: `/Users/samlindstrom/Code/asset-tracker/backend/scripts/ops/verify-lean-baseline.sh`
 
 ## Quick Start
 1. Ensure env vars are set (see `internal/config`), per service:
