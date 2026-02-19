@@ -14,7 +14,7 @@ Gate B progress snapshot:
 5. CI runs backend tests and frontend build on PRs: `PASS`
 6. Operational baseline (error tracking, metrics, runbook): `IN PROGRESS`
 
-Current production-readiness blocker: apply `docs/ops-dashboard-alerts-v1.md` in the deployed monitoring stack and verify live signal flow.
+Current production-readiness blocker: apply the lean baseline in `docs/ops-dashboard-alerts-v1.md` in the deployed monitoring stack and verify live signal flow.
 
 ## 1. Checkpoint Decision
 
