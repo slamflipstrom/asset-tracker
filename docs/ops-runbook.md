@@ -9,6 +9,8 @@ This runbook covers first-response checks for the v1 services:
 - `asset-ws` (`backend/cmd/ws`) for API + websocket ingress
 - `asset-worker` (`backend/cmd/worker`) for price refresh jobs
 
+Dashboard and alert definitions: `docs/ops-dashboard-alerts-v1.md`
+
 ## Quick Health Checks
 
 1. Confirm service health endpoint:
@@ -17,6 +19,8 @@ This runbook covers first-response checks for the v1 services:
    - `GET /debug/vars` on `asset-ws`.
 3. Confirm worker logs are advancing:
    - Recent `refresh cycle completed` log entries should be present.
+4. Verify required telemetry keys exist:
+   - `backend/scripts/ops/verify-debug-vars.sh https://<asset-ws-host>/debug/vars`
 
 ## Metrics (from `/debug/vars`)
 

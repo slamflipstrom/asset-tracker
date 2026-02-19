@@ -136,5 +136,9 @@ If your environment blocks default Go cache writes, set:
   - `docs/realtime-v1-decision.md`
 - Ops runbook:
   - `docs/ops-runbook.md`
+- Ops dashboard + alerts spec:
+  - `docs/ops-dashboard-alerts-v1.md`
+- Telemetry verification script:
+  - `backend/scripts/ops/verify-debug-vars.sh`
 - Planning:
   - `docs/v1-checkpoint-plan.md`
